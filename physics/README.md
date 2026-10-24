@@ -33,6 +33,7 @@ view.clipTime();    // en qué segundo va, para sincronizar lo que se dibuja al 
 view.stop();        // soltar el clip o la cámara y volver al robot físico, de pie
 await view.loadPolicy(onnxUrl, jsonUrl); // una política entrenada (training/policies/): el robot se equilibra solo
 view.clearPolicy(); // quitarla y volver a los motores rígidos
+await view.setWorld(WORLDS[1]); // un mundo de physics/worlds: piso, agarre, viento, masas y motores (ver más abajo)
 view.dispose(); // al desmontar: corta el ciclo y libera WebGL y la memoria de MuJoCo
 ```
 
@@ -153,6 +154,30 @@ Sin dinámica, igual que `mimic`: el G1 se coloca en cada pose. Usa los mismos c
 - **Sin desplazamiento en vivo.** La pelvis queda en el origen: en vivo no hay trayectoria. Los clips sí (ver arriba).
 - **La cintura del G1 gira poco** (unos 30° de inclinación), así que agacharse no se copia entero.
 - **Una persona.** `mimic` sigue a la que MediaPipe elija.
+
+## Mundos: `view.setWorld(world)`
+
+Los mundos donde el robot entrena y se muestra (SIM-3 del [plan del producto](../docs/plan-producto.md)). Un archivo por mundo en [`worlds/`](worlds), con el formato del contrato, leído por el entrenamiento y por la web, para que lo que se ve sea lo que se entrenó. Cada parámetro es un rango `[mín, máx]`: el entrenamiento sortea un valor por episodio; la web muestra el del medio.
+
+```js
+import { WORLDS } from 'tridi-physics'; // los cuatro, en orden: plano, piedras, resbaloso, viento
+await view.setWorld(WORLDS[1]);          // corta un clip o la cámara; con otra escena, recarga el modelo y la política
+view.world();                            // el mundo actual, o null
+```
+
+| Mundo | Escena | Fricción del piso | Viento (m/s, de costado) | Masas | Motores | Empujones al entrenar (N) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `plano` | `scene_mjx.xml` | 1 | 0 | ×1 | ×1 | 0–300 |
+| `piedras` | `scene_mjx_stones.xml` | 0,8–1,2 | 0 | ×0,95–1,05 | ×0,9–1,1 | 0–300 |
+| `resbaloso` | `scene_mjx.xml` | 0,25–0,45 | 0 | ×0,95–1,05 | ×0,9–1,1 | 0–200 |
+| `viento` | `scene_mjx.xml` | 0,9–1,1 | 6–14 | ×0,9–1,1 | ×0,85–1,15 | 0–300 |
+
+El formato es el de "Mundos" en [`../docs/contrato.md`](../docs/contrato.md) (`title`, `scene`, `friction`, `wind_mps`, `mass_scale`, `motor_scale`, `push_n`), y cada archivo dice el porqué de sus valores en `why`.
+
+- **Cómo se aplica** (`sim.applyWorld`): la fricción, en los pares de contacto con el piso (y con las piedras), que pisan la de las geometrías; las masas, en `body_mass` y `body_inertia`, y después `mj_setConst`; los motores, en `kp` y `kv` de cada actuador y en el tope de torque de cada articulación; el viento, como fuerza en el torso que se suma a los empujones: ½·ρ·Cd·A·v² con aire de 1,2 kg/m³ y Cd·A ≈ 0,5 m² (una persona de pie), así que 10 m/s son unos 30 N (`src/worlds.js`). Siempre parte de los valores del modelo, así que cambiar de mundo no acumula.
+- **Las piedras** son un mapa de alturas de 161×161 celdas de 5 cm sobre 8×8 m, con una semilla fija: siempre el mismo terreno. Lo genera `npm run make-stones-scene` a partir de `scene_mjx.xml` (el robot y los contactos no cambian; los pies tienen pares también con las piedras). Hay que regenerarlo si cambia `scene_mjx.xml`.
+- **`npm run check`** incluye `check-worlds`: cada mundo carga y sus parámetros llegan a MuJoCo. Informa, sin exigirlo, cuánto aguanta de pie la política de hoy (entrenada solo en plano): con los valores del medio aguanta los 10 s en los cuatro mundos. Los extremos de los rangos y los mundos que no vio son la prueba de verdad (SIM-5); con 40 N de viento, por ejemplo, se cae a los 3,5 s. Medir la robustez de verdad es SIM-5, con una política entrenada en estos mundos.
+- **Falta en Python:** el lector de `worlds/` para `training/env.py` (ENT-3) tiene que aplicar lo mismo que `applyWorld`, con los mismos campos.
 
 ## Cómo funciona
 

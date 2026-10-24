@@ -1,0 +1,11 @@
+{
+  "id": "viento",
+  "title": "Viento",
+  "scene": "unitree_g1/scene_mjx.xml",
+  "friction": [0.9, 1.1],
+  "wind_mps": [6.0, 14.0],
+  "mass_scale": [0.9, 1.1],
+  "motor_scale": [0.85, 1.15],
+  "push_n": [0.0, 300.0],
+  "why": "Viento fuerte de costado: 10 m/s empujan el torso con unos 30 N (arrastre de una persona de pie, src/worlds.js). Masas y motores varían más."
+}

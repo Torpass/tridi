@@ -171,8 +171,8 @@ El video trae el temblor de MediaPipe cuadro a cuadro, y el robot lo copiaba: se
 
 | Camino | Qué se hace | Caminata real de `data/clips/`, crudo → ahora |
 | --- | --- | --- |
-| `playClip` | `smoothForDisplay` (`src/motion.js`): la referencia limpia del entrenamiento (`reference.js`) y la altura de la pelvis suavizada 0,2 s | Aceleración vertical de la pelvis 24,4 → 5,0 m/s² (p95; una persona camina con 2 a 5), rodilla 191 → 91 rad/s², pies a menos de 1,5 cm del piso en el 95 % de los cuadros |
-| `mimic` (cámara) | `createRobotPoseFilter` (`src/filters.js`): One Euro sobre la altura, el rumbo y las 29 articulaciones del robot | Pelvis 22,2 → 5,4 m/s², rodilla 166 → 66 rad/s², a cambio de 33 ms de retraso (un cuadro de cámara) |
+| `playClip` | `smoothForDisplay` (`src/motion.js`): la referencia limpia del entrenamiento (`reference.js`) y la altura de la pelvis suavizada 0,2 s | Aceleración vertical de la pelvis 24,4 → 3,2 m/s² (p95; una persona camina con 2 a 5), rodilla 191 → 77 rad/s², pies a menos de 2 cm del piso en el 95 % de los cuadros. Desde el suavizado de `data/` los clips ya llegan con 11,5 y 95 |
+| `mimic` (cámara) | `createRobotPoseFilter` (`src/filters.js`): One Euro sobre la altura, el rumbo y las 29 articulaciones del robot | Pelvis 22,2 → 3,0 m/s², rodilla 166 → 60 rad/s², a cambio de 33 ms de retraso (un cuadro de cámara). Con el filtro de `data/live` la cámara ya llega con 12,6 y 75 |
 
 `scripts/check-smooth.mjs` lo exige en `npm run check`. El entrenamiento sigue usando la referencia sin el suavizado extra de la altura: los pies de una política tienen que estar de verdad en el piso.
 
@@ -204,6 +204,21 @@ Sin dinámica, igual que `mimic`: el G1 se coloca en cada pose. Usa los mismos c
 | Error de alcance, poses sintéticas | 2,0 a 2,7 cm (hay un sesgo de 2 cm a propósito: `JOINT_PENALTY`, para preferir posturas naturales) |
 | Clip real de caminata (356 cuadros) | Los 356 seguidos, error mediano 3,2 cm y máximo 4,9 cm, rodilla entre 0 y 1,3 rad |
 | Alcance del brazo del G1 | 30 cm del hombro a la muñeca: es corto, el robot no llega a donde llega una persona |
+
+### Piernas que no se cruzan
+
+De perfil, el costado de cada pierna sale de la profundidad de MediaPipe, que es lo que peor mide, y la IK de la pierna solo fija rodilla y tobillo: con la pierna estirada el giro de la cadera queda libre. En la caminata eso giraba la cadera izquierda entre 27° y 71°, cerraba las dos piernas contra su tope y **cruzaba los pies en el 12 % de los cuadros**. `retarget.js` ahora:
+
+- penaliza más el giro de la cadera (`HIP_TWIST_PENALTY`) y cerrar la pierna hacia adentro (`HIP_INWARD_PENALTY`), no abrirla (los jumping jacks la abren);
+- no deja que un segmento de la pierna apunte más de 5° hacia la otra pierna, medido en el marco de las caderas (`MAX_LEG_INWARD`).
+
+| Clip de `data/clips/` | Pies cruzados (antes → ahora) | Giro de cadera p95 | Alcance (≤ 8 cm) |
+| --- | --- | --- | --- |
+| Caminata | 12 % → 0 % | 68° → 19° | 100 % |
+| Carrera | 7 % → 0 % | 48° → 9° | 97 % |
+| Jumping jacks | 0 % → 0 % (abre las piernas 24°, igual que antes) | 39° → 11° | 98 % |
+
+`check-retarget` lo exige para cada clip de `data/clips/`. Vale también para la cámara en vivo (es el mismo retargeting). Los `RobotMotion` de `motions/` se regeneraron: **las políticas de imitación entrenadas antes siguen la referencia vieja** y hay que reentrenarlas.
 
 ### Límites del retargeting
 

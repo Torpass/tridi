@@ -32,9 +32,10 @@ Pedido de César: una UI que cualquiera entienda, hasta una persona mayor, con m
 
 - [x] **W8.1 Menú principal.** "Tridi" arriba al centro y tres opciones grandes, numeradas y con palabras simples: Entrena a Tridi en vivo, Sube un video, Ver simulaciones. En celular entran las tres sin scroll.
 - [x] **W8.2 Robots de puntos.** Uno por opción: bailando, sentado viendo un video y mirando el teléfono (un recap de lo que hizo). Con hover (o por turnos en pantallas táctiles), los puntos se juntan y forman la cara del robot. Un solo canvas WebGL para todo (`web/src/dots/`).
-- [x] **W8.3 Rutas y carga por etapas.** `#/`, `#/en-vivo`, `#/subir`, `#/simulaciones`. El menú solo carga three.js (144 KB comprimidos); cada pantalla es un pedazo aparte, y MuJoCo y el robot (30 MB) se precargan cuando el cursor llega a su tarjeta.
+- [x] **W8.3 Rutas y carga por etapas.** `#/`, `#/en-vivo`, `#/subir`, `#/simulaciones`. El menú solo carga three.js (144 KB comprimidos); cada pantalla es un pedazo aparte. El robot se carga una vez al abrir la página (W8.7).
 - [x] **W8.4 Nunca colgado.** Mientras baja el G1, en su panel saluda un robot de puntos con una barra de progreso; si una pantalla tarda, aparece "Cargando…"; si no se puede descargar, una pantalla explica qué hacer.
 - [x] **W8.5 Tarjetas 3D y entorno vivo.** Las tarjetas son placas de vidrio con grosor que se inclinan con el cursor, y la cámara de su robot gira con ellas. Los puntos del fondo se apartan del cursor, una luz suave lo sigue y los robots lo miran.
+- [x] **W8.7 Un solo robot y pantalla de carga.** El G1 se crea una vez al abrir la página (`web/src/robot-host.js`) y su canvas se mueve entre pantallas; una pantalla de carga con el robot de puntos cubre el inicio ([decisión](../docs/decisiones/2026-10-24-robot-unico-y-carga-al-abrir.md)). Con el arreglo de `physics/src/sim.js`, el robot pasó de 26 s a 6,6 s.
 - [x] **W8.6 Pantallas En vivo y Subir.** Conectadas (M4, M5 y M6). Empujar flota sobre el robot y se ve sin scroll en 390×844, 1280×720 y 1366×768.
 
 ## M3. Visor de la simulación (junto con Pastor)
@@ -67,10 +68,10 @@ Pedido de César: una UI que cualquiera entienda, hasta una persona mayor, con m
 
 La web es un producto para empresas de robots humanoides: profesional, sobria, con números reales. Regla en [`../docs/decisiones/2026-10-24-marca-b2b-robotica.md`](../docs/decisiones/2026-10-24-marca-b2b-robotica.md); guía completa en [`../docs/marca.md`](../docs/marca.md).
 
-- [ ] **W9.1 Estilo.** Los 4 votan 3 referencias de `docs/marca.md`; con eso, paleta (una base y un acento), tipografía (sans + mono para datos) y componentes. Estilo propio, sin copiar a Tesla ni a nadie.
-- [ ] **W9.2 Landing.** Las 8 secciones de `docs/marca.md` (hero con el G1 en vivo, problema, cómo funciona, pruébalo, resultados, para quién, tecnología, cierre).
-- [ ] **W9.3 Consola.** Cámara, Subir y Simulaciones con el mismo estilo, como la parte "producto" de la landing. Las funciones no cambian.
-- [ ] **W9.4 Cifras.** Cada número de la web sale de un README del repo y respeta "Lo que NO podemos decir" de `docs/pitch/diferencia.md`. Sin logos ni nombres de empresas como clientes.
+- [~] **W9.1 Estilo.** Voto de César registrado en la decisión de marca (figure.ai, skild.ai, scale.com; base clara). Aplicado: base gris clarito `#f1f2f4`, superficies blancas, tinta casi negra, un acento cobalto, Geist y Geist Mono (`web/src/style.css`). Falta el voto de los otros 3.
+- [x] **W9.2 Landing.** `web/src/screens/home.js`, con el G1 en vivo y Empujar en el hero, y la política entrenada cargada. Las 8 secciones de `docs/marca.md` (hero con el G1 en vivo, problema, cómo funciona, pruébalo, resultados, para quién, tecnología, cierre).
+- [x] **W9.3 Consola.** Mismo estilo en las tres pantallas; los robots de puntos quedan en gris, sin cara, como una nube de datos que se arma en robot (pantalla de carga y espera del G1). Salieron el fondo de puntos, la luz del cursor y las tarjetas inclinables. Cámara, Subir y Simulaciones con el mismo estilo, como la parte "producto" de la landing. Las funciones no cambian.
+- [x] **W9.4 Cifras.** Cada número enlaza a su README: ~40 s por 10 s de video (`data/`), 3,2 cm (`physics/`), 73 min, 40 M pasos, 4 de 4 empujones y la escalera (`training/`). Sin logos ni empresas como clientes. Cada número de la web sale de un README del repo y respeta "Lo que NO podemos decir" de `docs/pitch/diferencia.md`. Sin logos ni nombres de empresas como clientes.
 
 ## M7. Pulido para la demo
 

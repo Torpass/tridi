@@ -4,6 +4,7 @@
 // robot look buggy even when it did not fall.
 // Run: npm run check
 import { readdirSync, readFileSync } from 'node:fs';
+import { CLEAR_M, FEET_APART_M } from '../src/clearance.js';
 import { createRobotPoseFilter } from '../src/filters.js';
 import { LOOP_BLEND_S, sampleLoopStart, sampleMotion, smoothForDisplay } from '../src/motion.js';
 import { createPoseTracker } from '../src/pose.js';
@@ -128,6 +129,56 @@ console.log('upright sideways: no constant lean in what the screen shows (level.
   }
 }
 
+console.log('hands out of the legs, feet apart (clearance.js)');
+{
+  // The walk's hand passed through the thigh in 237 of 356 frames. Every shown frame must keep the
+  // wrist and the hand CLEAR_M from either thigh's axis (1 mm of slack for the search's 1 degree).
+  const body = (n) => mujoco.mj_name2id(kinematic, mujoco.mjtObj.mjOBJ_BODY.value, n);
+  const at = (id) => [data.xpos[3 * id], data.xpos[3 * id + 1], data.xpos[3 * id + 2]];
+  const toSegment = (p, a, b) => {
+    const ab = b.map((v, i) => v - a[i]);
+    const t = Math.max(0, Math.min(1, ab.reduce((sum, v, i) => sum + v * (p[i] - a[i]), 0) / ab.reduce((sum, v) => sum + v * v, 0)));
+    return Math.hypot(...p.map((v, i) => v - a[i] - t * ab[i]));
+  };
+  for (const id of readdirSync(new URL('../motions/', import.meta.url)).filter((f) => f.endsWith('.json'))) {
+    const gapOf = (motion) => {
+      let worst = Infinity;
+      for (const q of motion.qpos) {
+        data.qpos.set(q);
+        mujoco.mj_kinematics(kinematic, data);
+        for (const side of ['left', 'right']) {
+          const elbow = at(body(`${side}_elbow_link`));
+          const wrist = at(body(`${side}_wrist_yaw_link`));
+          const hand = wrist.map((v, i) => v + 0.6 * (v - elbow[i]));
+          for (const leg of ['left', 'right']) {
+            const [a, b] = [at(body(`${leg}_hip_pitch_link`)), at(body(`${leg}_knee_link`))];
+            worst = Math.min(worst, toSegment(wrist, a, b), toSegment(hand, a, b));
+          }
+        }
+      }
+      return worst;
+    };
+    // The ankles' sideways distance, in the robot's heading: the walk's came down to 6.5 cm.
+    const apartOf = (motion) => {
+      let worst = Infinity;
+      for (const q of motion.qpos) {
+        data.qpos.set(q);
+        mujoco.mj_kinematics(kinematic, data);
+        const [l, r] = ['left', 'right'].map((side) => at(body(`${side}_ankle_roll_link`)));
+        const yaw = 2 * Math.atan2(q[6], q[3]);
+        worst = Math.min(worst, -Math.sin(yaw) * (l[0] - r[0]) + Math.cos(yaw) * (l[1] - r[1]));
+      }
+      return worst;
+    };
+    const raw = read(`../motions/${id}`);
+    const displayed = smoothForDisplay(mujoco, kinematic, raw);
+    const apart = apartOf(displayed);
+    expect(apart >= FEET_APART_M - 0.002, `${id.replace('.json', '')}: ankles at least ${(100 * apart).toFixed(1)} cm apart sideways (the reference: ${(100 * apartOf(raw)).toFixed(1)}), ${100 * FEET_APART_M} needed`);
+    const shown = gapOf(displayed);
+    expect(shown >= CLEAR_M - 0.001, `${id.replace('.json', '')}: hands at least ${(100 * shown).toFixed(1)} cm from the thighs' axes (the reference: ${(100 * gapOf(raw)).toFixed(1)}), ${100 * CLEAR_M} needed`);
+  }
+}
+
 console.log('starting a clip over: no jump from its last pose to its first');
 {
   // Each loop used to jump from the last pose to the first: 67 degrees in a joint in the run, 147 in
@@ -162,8 +213,8 @@ console.log('starting a clip over: no jump from its last pose to its first');
 console.log('mimic: the walk fed frame by frame like the live camera');
 {
   const clip = read('../../data/clips/clip_2026-10-23_caminar-perfil_01.json');
-  const tracker = createPoseTracker();
-  const retargeter = createRetargeter(mujoco, kinematic, { mirror: false });
+  const tracker = createPoseTracker({ smooth: false }); // as view.mimic: the clip's points are filtered already
+  const retargeter = createRetargeter(mujoco, kinematic, { mirror: false, live: true });
   const filter = createRobotPoseFilter(sim.model.nq);
   const raw = [];
   const smooth = [];
@@ -190,6 +241,35 @@ console.log('mimic: the walk fed frame by frame like the live camera');
     if (err < best) [best, lag] = [err, shift * dt];
   }
   expect(lag <= MAX_LAG_S, `follows the person ${(1000 * lag).toFixed(0)} ms late, at most ${1000 * MAX_LAG_S}`);
+}
+
+console.log('mimic: the wrists follow the hand facing the camera, and stay quiet in profile');
+{
+  // Live only (retarget.js `live`). Seen from the side the hand's points are a guess: the profile
+  // walk's wrist must stay within 15 degrees of straight. Facing the camera (jumping jacks) it must
+  // move, and without the flips between limits (+-113 degrees) that reading the hand's turn caused:
+  // at most 45 degrees between two frames at p95 (the arms swing up to ~30 there).
+  const wrists = ['left', 'right'].flatMap((side) => ['pitch', 'yaw'].map((j) => kinematic.jnt_qposadr[mujoco.mj_name2id(kinematic, mujoco.mjtObj.mjOBJ_JOINT.value, `${side}_wrist_${j}_joint`)]));
+  const deg = (r) => (r * 180) / Math.PI;
+  const wristRows = (id) => {
+    const clip = read(`../../data/clips/${id}.json`);
+    const tracker = createPoseTracker({ smooth: false });
+    const retargeter = createRetargeter(mujoco, kinematic, { mirror: false, live: true });
+    const rows = clip.frames.map((f) => {
+      const world = f.joints.map(([x, y, z, v]) => ({ x, y: -y, z: -z, visibility: v }));
+      return Array.from(retargeter.solve(tracker.update(world, world, f.t)).qpos);
+    });
+    retargeter.delete();
+    return rows;
+  };
+  const walk = wristRows('clip_2026-10-23_caminar-perfil_01');
+  const bent = p95(walk.flatMap((q) => wrists.map((a) => q[a])));
+  expect(deg(bent) < 15, `profile walk: wrists within ${deg(bent).toFixed(0)} degrees of straight (p95), under 15`);
+  const jacks = wristRows('clip_2026-10-24_jumping-jacks-nasm_01');
+  const range = Math.max(...wrists.map((a) => Math.max(...jacks.map((q) => q[a])) - Math.min(...jacks.map((q) => q[a]))));
+  const step = p95(jacks.slice(1).map((q, i) => Math.max(...wrists.map((a) => Math.abs(q[a] - jacks[i][a])))));
+  expect(deg(range) > 20, `jumping jacks: a wrist moves through ${deg(range).toFixed(0)} degrees, over 20`);
+  expect(deg(step) < 45, `jumping jacks: ${deg(step).toFixed(0)} degrees between frames (p95), under 45`);
 }
 
 data.delete();

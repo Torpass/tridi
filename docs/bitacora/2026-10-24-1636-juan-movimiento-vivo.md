@@ -3,7 +3,7 @@ persona: Juan
 rama: juan/movimiento-vivo
 sesion: 27bac5c6-8df0-4d1c-9947-f9d999dbb804
 inicio: 2026-10-24 16:36
-estado: cerrada
+estado: en curso
 ---
 
 # El robot en vivo camina y salta de verdad, y la caminata reproducida ya no resbala
@@ -60,6 +60,28 @@ Juan: que la caminata se vea más natural, y que en vivo el robot vaya adonde va
 - **Solo en lo que se ve:** `physics/motions/` no cambia, porque son las referencias con las que se entrenaron las políticas (y Pastor sigue entrenando con ellas).
 - **Medido:** torso en promedio a 0,1° (caminar), 0,3° (correr) y 0,3° (jacks) en vez de 6,0, 9,0 y 5,6; en vivo, 0,1°. Pruebas en `check-smooth` y `check-root`; todo `npm run check` pasa. En el navegador, al final de Capture el robot de frente va derecho.
 - En el árbol hay cambios de `web/` que no son de esta sesión (una marca nueva: `brand.js`, `index.html`, `style.css`…): no se tocaron ni se commitearon.
+
+## Manos fuera de las piernas, pies separados
+
+- **Lo que quedaba (Juan):** en Capture se veía todavía algo torcido, y las manos atravesaban las piernas.
+- **Medido en la caminata mostrada:** la mano a 0,2 cm del eje del muslo en la referencia (dentro de la pierna en 237 de 356 cuadros); los tobillos llegaban a 6,5 cm de lado a lado (pies que se tocan, piernas que parecen cruzadas; correr 5,9 cm).
+- **`physics/src/clearance.js`:** donde haría falta, primero las caderas abren (los tobillos giran al revés para que las suelas sigan planas) hasta 12 cm entre tobillos, y después los hombros abren hasta que la mano y la muñeca queden a 11 cm del eje de cada muslo y a 15 cm del eje pelvis-torso (antes una mano cruzaba delante de la pelvis). Hasta 10° por cadera y 30° por hombro. La apertura nunca se queda corta y cambia a 86°/s como máximo: en un clip empieza antes del contacto; en vivo, abre al instante y cierra a ese ritmo. Un promedio suave que la seguía llegaba tarde y dejaba la mano adentro en 49 cuadros.
+- Como `level.js`, solo en lo que se ve (`smoothForDisplay` y `mimic`); `physics/motions/` no cambia.
+- **Comprobado:** `check-smooth` mide en los tres clips manos a ≥11 cm de los muslos y tobillos a ≥12 cm; todo `npm run check` pasa. En el navegador, al final de Capture, el robot camina derecho, con los brazos al costado y las piernas sin cruzarse.
+- La investigación de manos y dedos en vivo está en [`../investigacion/2026-10-24-manos-y-dedos-en-vivo.md`](../investigacion/2026-10-24-manos-y-dedos-en-vivo.md).
+
+## Paso 1 de la investigación: brazos más sueltos en vivo
+
+Todo detrás de la opción `live` del retargeting (`createRetargeter(..., { live: true })`, la usa `mimic`): los `RobotMotion` de los clips, que son las referencias de entrenamiento, no cambian (`check-retarget` lo comprueba).
+
+- **Muñecas:** copian cómo se dobla la mano respecto del antebrazo (arriba-abajo y a los lados), con los puntos de muñeca, índice y meñique de la pose. El doblez se mide sobre el antebrazo de la persona y se aplica sobre el del robot, así la diferencia entre los dos brazos no aparece como una muñeca doblada.
+  - Primer intento, que también copiaba el giro de la mano (roll): saltaba entre sus topes (±113°) en jumping jacks, porque índice y meñique están a ~5 cm y su profundidad es ruidosa. Se dejó en 0: el giro del antebrazo lo da el hombro.
+  - De perfil la mano se ve de canto y sus puntos son un invento (la caminata quedaba doblada ~45° todo el clip): el doblez cuenta entero de frente a la cámara y se apaga hacia el perfil (cos² del rumbo).
+  - Medido: caminata de perfil, muñecas a 6° de rectas (p95); jumping jacks de frente, recorren 74°, sin saltos (36° entre cuadros, p95, antes del filtro de articulaciones).
+- **Hombro:** la penalización al giro baja de 0,05 a 0,005 de frente a la cámara y vuelve a 0,05 de perfil. Pose de "arco de fútbol" (codos a la altura del hombro, antebrazos arriba): el robot llega a 4,8 cm en vez de 7,7.
+- **Un filtro menos:** `pose.js` volvía a filtrar los puntos que `data/live` ya filtró; en vivo ya no (`createPoseTracker({ smooth: false })`). Las pruebas de vivo de `check-smooth` siguen en 33 ms de retraso de rodilla (el filtro que se quitó no se mide ahí: el clip ya viene suavizado).
+- **60 fps:** `data/live` pide `frameRate: { ideal: 60 }`. Una cámara que no los tenga da los que pueda. Sin probar con la webcam real.
+- **Comprobado:** todo `npm run check` de `physics/` y `data/live` pasa, con una prueba nueva de muñecas en `check-smooth`. En el navegador, `mimic` con los jacks: el robot sigue los brazos y dobla las muñecas, sin errores.
 
 ## Sigue
 

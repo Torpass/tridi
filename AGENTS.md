@@ -1,6 +1,6 @@
 # Team 26: context for agents
 
-Official repo of team 26 at **Platanus Hack 26 Caracas** (October 23 to 25, 2026), track **🧊 Three-Dimensional**: Juan, Pastor, César and Ale. The idea is Physical AI; its details get written here and in `docs/` as they are decided. The repo is public, it closes Sunday 08:30, and judges read it with AI agents: keep it clean, and write the reason next to every threshold or magic number.
+Official repo of team 26 at **Platanus Hack 26 Caracas** (October 23 to 25, 2026), track **🧊 Three-Dimensional**: Juan, Pastor, César and Ale. The idea is **Tridi**: human video → 3D pose of one subject → simulated robot (MuJoCo) that learns to move by itself with a small neural policy trained by imitation. See [`docs/decisiones/2026-10-23-idea-tridi.md`](docs/decisiones/2026-10-23-idea-tridi.md). The repo is public, it closes Sunday 08:30, and judges read it with AI agents: keep it clean, and write the reason next to every threshold or magic number.
 
 ## Start of every session
 
@@ -31,14 +31,17 @@ Rules and template in [`docs/bitacora/README.md`](docs/bitacora/README.md).
 
 | Person | GitHub | Area | Folder |
 | --- | --- | --- | --- |
-| Pastor | @torpass | Physics engine | TBD |
-| Juan | @juanevillam | Data: where it comes from, what we do with it, how it is rendered | TBD |
-| César | @cisorm | TBD | TBD |
-| Ale | @alehernandezt | Documentation, pitch and script (does not code) | `docs/` |
+| Pastor | @torpass | Physics engine, robot, retargeting and 3D render | `physics/` |
+| Juan | @juanevillam | Data extraction: camera and video to a clean pose clip of one subject | `data/` |
+| César | @cisorm | User experience of the simulation (web app) | `web/` |
+| Ale | @alehernandezt | Strategy, pitch and script (does not code) | `docs/` |
+| TBD | | Policy training | `training/` |
 
 ## Submission files (from the organizers)
 
 `platanus-hack-project.jsonc` (name, Spanish one-liner and description, deploy URL), `project-description.md`, `project-logo.png` (1000x1000, max 500 KB) and a concise `README.md`. Edit them only when the person asks.
+
+Platanus validates **every commit on `main`** and posts "Submission Invalid" in Discord if these files hold placeholders, or lose their filled values. `scripts/ship.sh` runs `scripts/check-submission.sh` and refuses to ship otherwise. `deploy-url` points to the repo until the web app is deployed; replace it then.
 
 ## Conventions
 

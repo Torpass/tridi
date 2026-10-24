@@ -64,7 +64,15 @@ Pedido de César: una UI que cualquiera entienda, hasta una persona mayor, con m
 - [x] **W6.1 Etapas.** Subir → buscar personas (`tracking`) → calcular cómo se mueve (`pose3d`) → listo, con su avance y la posición en la cola. Si se sale de la pantalla, el trabajo sigue y al volver se retoma.
 - [x] **W6.2 Resultado.** El clip va primero en la galería ("Tu video") y "Verlo en simulaciones" abre `#/simulaciones/<id del clip>` con ese clip elegido. Se guarda en memoria: al recargar, la galería vuelve a las precargadas.
 
-## M9. Marca corporativa (innegociable)
+## M10. Intro de dos slides, estilo claro
+
+Pedido de César: volver al estilo claro de antes de M9 y abrir con una intro de dos slides ([decisión](../docs/decisiones/2026-10-24-web-intro-dos-slides-estilo-claro.md)).
+
+- [x] **W10.1 Estilo claro.** Vuelven Quicksand y Nunito, los robots de puntos con cara, las tarjetas inclinables y el fondo de puntos. Las funciones nuevas (robot único, carga rápida, política) se quedan.
+- [x] **W10.2 Slide 1: qué es Tridi.** Título, una frase y el flujo Video → Movimiento 3D → Robot. La figura de puntos se arma y pasa por actividades que entrenan la movilidad de un robot: bailar, boxeo, guitarra y coser (5,5 s cada una; entre una y otra los puntos se sueltan y se vuelven a armar). Debajo, una fila muestra la actividad actual y permite saltar a otra (`web/src/dots/figure.js`). En celular la figura queda tenue detrás del texto y los botones entran sin scroll.
+- [x] **W10.3 Slide 2: elige cómo empezar.** Solo el título y las tres tarjetas con textos cortos; suben al aparecer la slide.
+
+## M9. Marca corporativa (reemplazada por M10)
 
 La web es un producto para empresas de robots humanoides: profesional, sobria, con números reales. Regla en [`../docs/decisiones/2026-10-24-marca-b2b-robotica.md`](../docs/decisiones/2026-10-24-marca-b2b-robotica.md); guía completa en [`../docs/marca.md`](../docs/marca.md).
 

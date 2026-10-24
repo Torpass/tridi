@@ -1,0 +1,982 @@
+/* The landing (screens/home.js), told like a film: the real G1 fills the screen behind the page
+   (.film) and every chapter is a shot over it, with a caption in the corner. Dark, one signal
+   orange for what moves or can be touched, uppercase captions, mono for numbers.
+   The palette is scoped to .landing; the app screens keep the light tokens of style.css. */
+
+html.is-landing,
+html.is-landing body {
+  background: #0a0a09;
+}
+
+html.is-landing #scene,
+html.is-landing body::before {
+  display: none; /* the dot field belongs to the app screens */
+}
+
+/* Lenis drives the scroll; the browser must not smooth it a second time. */
+html.is-landing.lenis,
+html.is-landing.lenis body {
+  height: auto;
+  scroll-behavior: auto;
+}
+
+.landing {
+  --bg: #0a0a09;
+  --fg: #efede8;
+  --fg-2: #b5b2aa;
+  --dim: #77746d;
+  --line: rgb(239 237 232 / 0.14);
+  --signal: #ff4f1a;
+  --gutter: clamp(16px, 3.4vw, 48px);
+  position: relative;
+  color: var(--fg);
+  font: 400 17px/1.5 var(--display);
+}
+
+.landing h1,
+.landing h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: -0.025em;
+  line-height: 0.98;
+}
+
+.landing p,
+.landing figure,
+.landing ol,
+.landing ul {
+  margin: 0;
+  padding: 0;
+}
+
+.landing ol,
+.landing ul {
+  list-style: none;
+}
+
+/* ---- The film: the robot, fixed behind everything ---- */
+
+.film {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--scene);
+}
+
+.film > canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0;
+  transition: opacity 1.2s;
+}
+
+.film.ready > canvas {
+  opacity: 1;
+}
+
+/* Darkens the film when a chapter needs the words (or the video) in front. */
+.film-shade {
+  --shade: 0;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: rgb(10 10 9 / var(--shade));
+  pointer-events: none;
+}
+
+.boot {
+  position: absolute;
+  right: var(--gutter);
+  bottom: 40px;
+  display: grid;
+  gap: 4px;
+  width: min(320px, 80vw);
+  font: 500 11px/1.5 var(--mono);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  transition: opacity 0.4s;
+}
+
+.boot b {
+  font-weight: 500;
+  color: var(--signal);
+}
+
+.boot-track {
+  height: 1px;
+  margin-top: 8px;
+  background: var(--line);
+}
+
+.boot-bar {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--signal);
+  transition: width 0.2s;
+}
+
+.film.ready .boot {
+  opacity: 0;
+}
+
+/* ---- Buttons ---- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 20px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgb(10 10 9 / 0.35);
+  backdrop-filter: blur(10px);
+  color: var(--fg);
+  font: 500 14px/1 var(--display);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.3s;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--fg);
+  box-shadow: none;
+}
+
+.btn-light {
+  min-height: 38px;
+  border-color: var(--fg);
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 12px;
+}
+
+.btn-signal {
+  border-color: var(--signal);
+  background: var(--signal);
+  color: #0a0a09;
+}
+
+.btn-signal:hover:not(:disabled) {
+  border-color: var(--signal);
+  box-shadow: 0 0 44px -8px rgb(255 79 26 / 0.8);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn kbd {
+  padding: 3px 6px;
+  border: 1px solid rgb(10 10 9 / 0.35);
+  border-radius: 4px;
+  font: 500 10px/1 var(--mono);
+}
+
+.btn.kick {
+  animation: kick 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes kick {
+  20% {
+    transform: scale(0.94);
+    box-shadow: 0 0 0 0 rgb(255 79 26 / 0.7);
+  }
+  100% {
+    transform: none;
+    box-shadow: 0 0 0 28px rgb(255 79 26 / 0);
+  }
+}
+
+/* ---- Top bar ---- */
+
+.topbar {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  padding: 16px var(--gutter);
+  mix-blend-mode: normal;
+}
+
+.wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font: 700 21px/1 var(--display);
+  letter-spacing: -0.045em;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.wordmark svg {
+  width: 24px;
+  height: 24px;
+}
+
+.wordmark rect {
+  fill: var(--signal);
+}
+
+.wordmark circle {
+  fill: #0a0a09;
+}
+
+.wordmark path {
+  fill: none;
+  stroke: #0a0a09;
+  stroke-width: 2.2;
+  stroke-linecap: square;
+}
+
+.topnav {
+  display: flex;
+  gap: 32px;
+  margin-left: auto;
+  font: 500 12px/1 var(--display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.topnav a {
+  color: var(--fg-2);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.topnav a:hover {
+  color: var(--fg);
+}
+
+.live-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 10px var(--signal);
+  vertical-align: 1px;
+  animation: blink 1.6s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* ---- Chapters ---- */
+
+.chapter {
+  position: relative;
+  z-index: 1;
+}
+
+.sticky {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+}
+
+.caption {
+  position: absolute;
+  z-index: 2;
+}
+
+.caption h1 {
+  font-size: clamp(34px, 4.4vw, 68px);
+  max-width: 11em;
+}
+
+.caption h2 {
+  font-size: clamp(28px, 3.2vw, 48px);
+  max-width: 13em;
+}
+
+.caption p {
+  max-width: 30em;
+  color: var(--fg-2);
+}
+
+.product {
+  margin-bottom: 18px !important;
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--signal) !important;
+}
+
+/* Hero */
+
+.hero {
+  height: 100svh;
+  min-height: 600px;
+}
+
+.hero-live {
+  position: absolute;
+  top: 84px;
+  left: var(--gutter);
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.hero-caption {
+  left: var(--gutter);
+  bottom: clamp(40px, 9vh, 96px);
+}
+
+.hero-caption h1 {
+  font-size: clamp(40px, 5.6vw, 92px);
+  line-height: 0.92;
+}
+
+.hero-caption p {
+  margin-top: 22px !important;
+  font-size: clamp(16px, 1.25vw, 19px);
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+
+.hud {
+  position: absolute;
+  right: var(--gutter);
+  bottom: clamp(40px, 9vh, 96px);
+  z-index: 2;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  font: 500 11px/1.3 var(--mono);
+  text-transform: uppercase;
+}
+
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgb(10 10 9 / 0.45);
+  backdrop-filter: blur(10px);
+  color: var(--fg-2);
+}
+
+.state i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6fcf8a; /* green: standing, all good */
+}
+
+.state[data-state='push'] {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.state[data-state='push'] i,
+.state[data-state='fall'] i {
+  background: var(--signal);
+  box-shadow: 0 0 10px var(--signal);
+}
+
+.tally {
+  color: var(--dim);
+}
+
+/* On phones the words sit low, so the push button also lives in the HUD. */
+.hud-push {
+  display: none;
+}
+
+.scroll-cue {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  width: 1px;
+  height: 44px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.scroll-cue span {
+  position: absolute;
+  inset: 0;
+  background: var(--fg);
+  animation: cue 2s cubic-bezier(0.6, 0, 0.2, 1) infinite;
+}
+
+@keyframes cue {
+  0% {
+    transform: translateY(-100%);
+  }
+  60%,
+  100% {
+    transform: translateY(100%);
+  }
+}
+
+/* Capture: video, skeleton and robot on one clock */
+
+.capture {
+  height: 420svh;
+}
+
+.capture-media {
+  position: absolute;
+  left: var(--gutter);
+  bottom: clamp(32px, 7vh, 72px);
+  width: min(40vw, 640px);
+}
+
+.frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+  background: #000;
+}
+
+.frame figcaption {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg);
+  text-shadow: 0 1px 8px rgb(0 0 0 / 0.8);
+}
+
+.frame-video {
+  aspect-ratio: 16 / 9;
+  transform-origin: 0% 100%;
+}
+
+.frame-video video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* The skeleton sits over the video's corner, picture in picture. */
+.frame-skeleton {
+  position: absolute;
+  right: -18%;
+  bottom: -6%;
+  width: 46%;
+  aspect-ratio: 1;
+  border: 1px solid var(--line);
+  background: var(--scene);
+  box-shadow: 0 30px 60px -20px rgb(0 0 0 / 0.8);
+}
+
+.frame-skeleton canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.capture-caption {
+  left: var(--gutter);
+  top: clamp(96px, 16vh, 160px);
+  width: min(40vw, 560px);
+}
+
+/* The three beats share one spot and take turns. */
+.beats {
+  display: grid;
+}
+
+.beats li {
+  grid-area: 1 / 1;
+}
+
+.beats p {
+  margin-top: 16px !important;
+}
+
+/* Gym: the training runs with the scroll */
+
+.gym {
+  height: 460svh;
+}
+
+.gym-caption {
+  left: var(--gutter);
+  top: 50%;
+  width: min(36vw, 520px);
+  transform: translateY(-50%);
+}
+
+.counter {
+  display: grid;
+  gap: 6px;
+}
+
+.counter b {
+  font: 500 clamp(44px, 5.4vw, 88px)/0.9 var(--display);
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+.counter span {
+  font: 500 12px/1 var(--mono);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.gym-text {
+  margin-top: 24px !important;
+}
+
+.gym-readout {
+  display: flex;
+  gap: 32px;
+  margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.gym-readout div {
+  display: grid;
+  gap: 6px;
+}
+
+.gym-readout span {
+  font: 500 10px/1 var(--mono);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.gym-readout b {
+  font: 500 22px/1 var(--display);
+  font-variant-numeric: tabular-nums;
+}
+
+.gym-status {
+  margin-top: 14px !important;
+  font: 500 11px/1.5 var(--mono);
+  text-transform: uppercase;
+  color: var(--signal) !important;
+}
+
+.chart-fig {
+  display: grid;
+  gap: 8px;
+  margin-top: 28px;
+}
+
+.chart-fig figcaption {
+  font: 500 10px/1.4 var(--mono);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.chart {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.chart .grid line {
+  stroke: var(--line);
+}
+
+.chart text {
+  fill: var(--dim);
+  font: 500 9px var(--mono);
+}
+
+.chart .line {
+  fill: none;
+  stroke: var(--signal);
+  stroke-width: 1.6;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+}
+
+/* A dark wash on the side where the words are, so they read over any shot. */
+.gym .sticky::before,
+.capture .sticky::before,
+.policy .sticky::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.gym .sticky::before,
+.capture .sticky::before {
+  background: linear-gradient(90deg, rgb(10 10 9 / 0.6), rgb(10 10 9 / 0.2) 32%, transparent 50%);
+}
+
+.policy .sticky::before {
+  background: linear-gradient(270deg, rgb(10 10 9 / 0.6), rgb(10 10 9 / 0.2) 32%, transparent 50%);
+}
+
+/* Policy: the legs up close, the numbers beside them */
+
+.policy {
+  height: 260svh;
+}
+
+.policy-caption {
+  right: var(--gutter);
+  top: 50%;
+  width: min(36vw, 520px);
+  transform: translateY(-50%);
+}
+
+.specs {
+  display: grid;
+  margin-top: 28px !important;
+}
+
+.specs li {
+  display: grid;
+  grid-template-columns: minmax(130px, auto) 1fr;
+  align-items: baseline;
+  gap: 20px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+
+.specs b {
+  font: 500 clamp(30px, 3vw, 46px)/1 var(--display);
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.specs span {
+  font-size: 15px;
+  color: var(--fg-2);
+}
+
+.policy-note {
+  margin-top: 20px !important;
+  font-size: 15px;
+}
+
+/* Closing: the page closes over the film */
+
+.closing {
+  padding: 30vh var(--gutter) 0;
+}
+
+.closing-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.lede {
+  max-width: 30em;
+  margin-bottom: 28px !important;
+  font-size: clamp(18px, 1.6vw, 22px);
+  color: var(--fg-2);
+}
+
+.manifesto {
+  font-size: clamp(44px, 7vw, 116px) !important;
+  line-height: 0.92 !important;
+  max-width: 12em;
+}
+
+.manifesto .w {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: top;
+}
+
+.manifesto .w > span {
+  display: inline-block;
+}
+
+.closing-text {
+  max-width: 36em;
+  margin-top: 36px !important;
+  font-size: clamp(17px, 1.4vw, 21px);
+  color: var(--fg-2);
+}
+
+.roadmap {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr;
+  gap: 1px;
+  margin-top: clamp(56px, 8vw, 110px) !important;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.roadmap li {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 22px;
+  background: var(--bg);
+}
+
+.roadmap span {
+  font: 500 11px/1 var(--mono);
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.roadmap b {
+  font: 500 clamp(18px, 1.6vw, 24px)/1.15 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.roadmap .done span {
+  color: var(--signal);
+}
+
+.roadmap .now span::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--fg);
+  vertical-align: 1px;
+  animation: blink 1.6s steps(2) infinite;
+}
+
+.roadmap li:last-child b {
+  color: var(--fg-2);
+}
+
+.tries {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.try {
+  display: grid;
+  gap: 40px;
+  align-content: space-between;
+  min-height: 160px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--fg);
+  text-decoration: none;
+  transition: border-color 0.25s, background 0.25s;
+}
+
+.try:hover {
+  border-color: var(--signal);
+  background: rgb(255 79 26 / 0.07);
+}
+
+.try span {
+  font: 500 11px/1 var(--mono);
+  text-transform: uppercase;
+  color: var(--signal);
+}
+
+.try b {
+  font: 500 clamp(20px, 1.8vw, 26px)/1.1 var(--display);
+  letter-spacing: -0.02em;
+}
+
+.try b::after {
+  content: ' →';
+  color: var(--dim);
+}
+
+.try.unavailable {
+  opacity: 0.45;
+  cursor: default;
+  background: none;
+  border-color: var(--line);
+}
+
+.try.unavailable b::after {
+  content: '';
+}
+
+.footer {
+  display: grid;
+  gap: 56px;
+  max-width: 1200px;
+  margin: clamp(96px, 14vw, 180px) auto 0;
+  padding: 32px 0 36px;
+  border-top: 1px solid var(--line);
+}
+
+.footer > p {
+  max-width: 44em;
+  font-size: 15px;
+  color: var(--fg-2);
+}
+
+.foot-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.wordmark.big {
+  font-size: clamp(80px, 15vw, 220px);
+  line-height: 0.78;
+  letter-spacing: -0.075em;
+}
+
+.foot-specs {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  font: 500 11px/1.4 var(--mono);
+  text-transform: uppercase;
+}
+
+.foot-specs dt {
+  color: var(--dim);
+}
+
+.foot-specs dd {
+  margin: 0;
+}
+
+.foot-specs a {
+  color: var(--signal);
+}
+
+/* ---- Phones and small tablets: the robot stays centered, the words go low ---- */
+
+@media (max-width: 1000px) {
+  .topnav {
+    display: none;
+  }
+
+  .topbar .btn {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 860px) {
+  .hero-caption,
+  .capture-caption,
+  .gym-caption,
+  .policy-caption {
+    left: var(--gutter);
+    right: var(--gutter);
+    width: auto;
+  }
+
+  /* A soft dark floor under low captions keeps them readable over the robot. */
+  .hero::after,
+  .sticky::after {
+    content: '';
+    position: absolute;
+    inset: 55% 0 0;
+    z-index: 1;
+    background: linear-gradient(transparent, rgb(10 10 9 / 0.8) 60%);
+    pointer-events: none;
+  }
+
+  .hero-caption {
+    bottom: 120px;
+  }
+
+  .hero-caption .cta-row .hero-push {
+    display: none; /* the HUD carries it, higher on the screen */
+  }
+
+  .hud {
+    top: 112px;
+    bottom: auto;
+  }
+
+  .gym .sticky::before,
+  .capture .sticky::before,
+  .policy .sticky::before {
+    display: none; /* the low captions have their own floor (::after) */
+  }
+
+  .hud-push {
+    display: inline-flex;
+  }
+
+  .scroll-cue {
+    display: none;
+  }
+
+  .capture-caption {
+    top: auto;
+    bottom: 32px;
+  }
+
+  .capture-media {
+    top: 80px;
+    bottom: auto;
+    width: 62vw;
+  }
+
+  .frame-skeleton {
+    right: -48%;
+    width: 44%;
+  }
+
+  .gym-caption,
+  .policy-caption {
+    top: auto;
+    bottom: 28px;
+    transform: none;
+  }
+
+  .gym-text,
+  .chart-fig,
+  .policy-note {
+    display: none;
+  }
+
+  .specs li {
+    grid-template-columns: 100px 1fr;
+    padding: 10px 0;
+  }
+
+  .roadmap,
+  .tries {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot,
+  .roadmap .now span::before,
+  .scroll-cue span {
+    animation: none;
+  }
+}

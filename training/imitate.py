@@ -35,12 +35,28 @@ MIN_REMAINING_S = 1.0
 
 FEET = ("left_ankle_roll_link", "right_ankle_roll_link")
 
+# The collision spheres of each foot: scene_mjx.xml pairs exactly these with the floor.
+FOOT_SPHERES = {
+    "left": ("left_foot1_collision", "left_foot2_collision", "left_foot3_collision"),
+    "right": ("right_foot1_collision", "right_foot2_collision", "right_foot3_collision"),
+}
+
 # The retargeted pelvis path comes from video and jitters: its frame-to-frame speed jumps to 4 m/s
-# in a 1 m/s walk. Velocities taken from it would launch the robot at every reset, so the path is
+# in a 0.6 m/s walk. Velocities taken from it would launch the robot at every reset, so the path is
 # smoothed over 0.3 s first (a step lasts ~0.5 s, so the gait survives).
 SMOOTH_S = 0.3
 
-MIMIC_OBS_DIM = 93 + NU + 3 + 1
+# Joint angles carry MediaPipe's frame-to-frame jitter too, which the motors chase (0.12 rad of leg
+# error with the pelvis held, diagnose_reference.py) and which shakes the grounded pelvis height.
+# 0.1 s is 3 frames at 30 fps: it removes the jitter and keeps a swing (~0.4 s) intact.
+JOINT_SMOOTH_S = 0.1
+
+# How far ahead the policy also sees the reference. Hips and ankles follow it 60 to 100 ms late
+# (diagnose_reference.py: soft position motors act like a slow filter), so seeing only the next
+# 20 ms leaves the policy no way to step in time. 0.1 s covers that lag; 0.25 s is half a step.
+LOOKAHEAD_S = (0.1, 0.25)
+
+MIMIC_OBS_DIM = 93 + NU + 3 + 1 + len(LOOKAHEAD_S) * (NU + 3)
 
 
 class Motion:
@@ -52,18 +68,34 @@ class Motion:
         self.fps = float(m["fps"])
         self.qpos = np.array(m["qpos"], dtype=np.float64)
         self.duration = (len(self.qpos) - 1) / self.fps
-        d = mujoco.MjData(model)
-        feet_ids = [model.body(n).id for n in FEET]
-        self.feet = np.zeros((len(self.qpos), 2, 3))
-        for i, q in enumerate(self.qpos):
-            d.qpos[:] = q
-            mujoco.mj_kinematics(model, d)
-            self.feet[i] = d.xpos[feet_ids]
-        # Velocities by finite differences: pelvis in the world, joints in rad/s.
         dt = 1 / self.fps
         window = max(1, int(round(SMOOTH_S * self.fps)))
-        self.qpos[:, :3] = smooth(self.qpos[:, :3], window)
-        self.root_vel = np.gradient(self.qpos[:, :3], dt, axis=0)
+        # The reference is cleaned for this model before anything is taken from it:
+        # 1. joints lightly smoothed (JOINT_SMOOTH_S);
+        # 2. pelvis path smoothed on the floor plane only: smoothing its height too left a foot 1 cm
+        #    inside the floor in 10% of the walk and both feet in the air in 7%;
+        # 3. pelvis height set frame by frame so the lowest foot sphere of this model touches the
+        #    floor (the retargeting grounded it with the mesh feet of the display model);
+        # 4. feet targets taken from that final pose. They used to come from the pose before
+        #    smoothing, 2 cm (up to 13 cm) away from it, so feet and pelvis rewards disagreed.
+        self.qpos[:, 7:] = smooth(self.qpos[:, 7:], max(1, int(round(JOINT_SMOOTH_S * self.fps))))
+        self.qpos[:, :2] = smooth(self.qpos[:, :2], window)
+        d = mujoco.MjData(model)
+        feet_ids = [model.body(n).id for n in FEET]
+        spheres = [model.geom(n).id for side in FOOT_SPHERES.values() for n in side]
+        floor = model.geom("floor").id
+        self.feet = np.zeros((len(self.qpos), 2, 3))
+        for i in range(len(self.qpos)):
+            d.qpos[:] = self.qpos[i]
+            mujoco.mj_kinematics(model, d)
+            self.qpos[i, 2] -= min(mujoco.mj_geomDistance(model, d, g, floor, 1.0, None) for g in spheres)
+            d.qpos[2] = self.qpos[i, 2]
+            mujoco.mj_kinematics(model, d)
+            self.feet[i] = d.xpos[feet_ids]
+        # Velocities by finite differences of smoothed signals: pelvis in the world, joints in rad/s.
+        # The grounded height still wobbles a little, and its raw velocity would bounce the robot.
+        path = np.column_stack([self.qpos[:, :2], smooth(self.qpos[:, 2:3], window)])
+        self.root_vel = np.gradient(path, dt, axis=0)
         self.joint_vel = np.gradient(smooth(self.qpos[:, 7:], window), dt, axis=0)
 
     def sample(self, t: float):
@@ -109,17 +141,28 @@ class MimicEnv(G1Env):
         - [93:122]  reference joint angles minus the standing pose
         - [122:125] reference pelvis velocity, in the pelvis frame (m/s)
         - [125]     reference pelvis height minus the current one (m)
+
+        and, for each instant in LOOKAHEAD_S (0.1 s, then 0.25 s), 32 more:
+
+        - 29: reference joint angles minus the standing pose
+        - 3:  reference pelvis position minus the current one, in the pelvis frame (m). It also tells
+              the policy how far it has drifted from the path, which ends the episode at 0.6 m.
         """
         q, root_vel, _, _ = self.motion.sample(self.t + CONTROL_DT)
         self.ref_next = q[7:]
         rot = np.zeros(9)
         mujoco.mju_quat2Mat(rot, self.data.qpos[3:7])
-        vel_body = rot.reshape(3, 3).T @ root_vel
+        to_body = rot.reshape(3, 3).T
+        ahead = []
+        for s in LOOKAHEAD_S:
+            q_ahead = self.motion.sample(self.t + s)[0]
+            ahead += [q_ahead[7:] - self.default, to_body @ (q_ahead[:3] - self.data.qpos[:3])]
         return np.concatenate([
             super().observe(),
             self.ref_next - self.default,
-            vel_body,
+            to_body @ root_vel,
             [q[2] - self.data.qpos[2]],
+            *ahead,
         ]).astype(np.float32)
 
     def apply(self, action: np.ndarray) -> np.ndarray:

@@ -6,7 +6,7 @@ inicio: 2026-10-24 02:49
 estado: en curso
 ---
 
-# La visión del producto contra el repo, el pitch para la Physical AI y su plan técnico
+# La visión del producto contra el repo, el pitch para la Physical AI, su plan técnico y el diagnóstico de la imitación
 
 ## Objetivo
 
@@ -17,7 +17,11 @@ Comparar el repo con la visión del producto: video o cámara → esqueleto 3D �
 - Revisión de `docs/estado.md`, las bitácoras, el contrato, `physics/`, `training/` y `web/`, incluido el commit `5f29ace` (imitación), que está en `origin/main` y todavía no en esta rama.
 - Pitch del producto en [`../pitch/pitch-producto.md`](../pitch/pitch-producto.md), con una tabla que separa lo que es verdad hoy de lo que es plan. No reemplaza el guion de 3 minutos.
 - Plan técnico en [`../plan-producto.md`](../plan-producto.md): el flujo completo en 7 pasos, dónde corre cada parte, los cambios de contrato propuestos (`POST /clips`, cola de entrenamiento, políticas, datos y mundos), lo que falta construir por área (ENT, SIM, SRV, WEB, DOC) con sus dependencias, y el orden por horario hasta el cierre. Puntero en mi sección de [`../estado.md`](../estado.md).
-- La primera versión del plan asignaba tareas por persona; a pedido de Pastor se rehízo como plan general, por área y sin dueños.
+- La primera versión del plan asignaba tareas por persona; a pedido de Pastor se rehízo como plan general, por área y sin dueños. Shipeado en `8078d4c`.
+- ENT-1, primer paso: `uv` instalado en la Mac de Pastor (M5, 10 núcleos) y `training/diagnose_reference.py`, que revisa una referencia de imitación sin política en 2 s: pies contra el piso, objetivos de los pies de la recompensa, rangos de los motores, y la referencia jugada por los motores con la pelvis sostenida (error, retraso por motor, contacto de los pies).
+- Observación de imitación con la referencia a 0,1 y 0,25 s (`f17e1e8`): por cada instante, los ángulos y la posición de la pelvis de la referencia respecto de la del robot. `obs_dim` pasa de 126 a 190 (al final, así el export no cambia de lógica) y `policy.json` lleva `lookahead_s`. Entrenamiento `walk-lookahead` de 10 M pasos lanzado en la M5.
+- Cambio de contrato propuesto (`261cbd5`, commit aparte): `POST /clips` con sus topes, la cola de entrenamiento (`/train`), los resultados, `--out` del retargeting, los campos nuevos de `policy.json` y la observación de 190, el formato de los datos y los mundos. Marcado "propuesta 2026-10-24".
+- Arreglo en `imitate.Motion` (la limpieza de la referencia): articulaciones suavizadas 0,1 s, pelvis suavizada solo en el plano del piso, altura de la pelvis puesta cuadro a cuadro para que la esfera más baja de los pies del modelo de entrenamiento toque el piso, y objetivos de los pies sacados de esa pose final.
 
 ## Qué se encontró (para quien siga)
 
@@ -31,12 +35,36 @@ Comparar el repo con la visión del producto: video o cámara → esqueleto 3D �
 
 ## Qué funcionó
 
-- Sesión de análisis y documentos: no se corrió código, todo sale de leer el repo y el historial de git.
+- El análisis y los documentos salen de leer el repo y el historial de git.
+- Diagnóstico de la caminata (`clip_2026-10-23_caminar-perfil_01`), antes → después del arreglo:
+
+  | Qué | Antes | Después |
+  | --- | --- | --- |
+  | Cuadros con un pie hundido más de 1 cm | 10 % | 0 % |
+  | Cuadros con los dos pies a más de 2 cm (caminando no hay vuelo) | 7 % | 0 % |
+  | Objetivos de los pies contra la pose: mediana (máxima) | 2,1 cm (12,7) | 0,1 cm (1,0) |
+  | Error de las piernas con la pelvis sostenida | 0,123 rad | 0,123 rad |
+
+- El error que queda no es la gravedad (0,016 rad con la pose quieta) ni el piso (0,102 rad sin contacto): es retraso. Caderas y tobillos siguen la referencia 60 a 100 ms tarde (kp = 75 y 20 con kv = 2 en `scene_mjx.xml`), y la observación muestra la referencia solo 20 ms adelante.
+- Con la referencia limpia el entrenamiento corre (`ppo.py --task walk`, 20 k pasos de prueba) a 14.400 pasos/s en la M5.
+- Entrenamiento `walk-clean` (10 M pasos, referencia limpia, 13,3 min en la M5). Episodio medio de `progress.csv`:
+
+  | Pasos | 0,1 M | 1 M | 3 M | 5 M | 7 M | 10 M |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | `walk-clean` | 0,54 s | 0,66 s | 0,75 s | **0,93 s** | 1,02 s | 1,03 s |
+  | `walk-v2` (Juan, M2) | | | | **0,9 s** | | |
+
+  Desde el inicio del clip (`evaluate_walk.py`): sigue 0,7 s sin entrenar, 1,3 s a los 3 M y 1,0 s a los 10 M, de 11,8 s.
 
 ## Qué no funcionó
 
 - Sugerí "partir de una política que ya sabe equilibrarse" para que cada video entrene más rápido, y se confundió con `g1-stand` como requisito. Es un atajo opcional y hoy no se puede enchufar (otras entradas, otra acción).
 - El primer diagnóstico de ENT-1 en el plan decía "reproducir la referencia solo con los motores". Eso ya lo hace `evaluate_walk.py` (fila "sin política") y no prueba nada: sin red el robot se cae aunque la referencia sea buena. Corregido a reproducirla con la pelvis sostenida y medir el seguimiento de los ángulos y el apoyo de los pies.
+- La primera versión del diagnóstico marcaba ángulos "fuera de rango" que se pasaban 0,00 rad: el retargeting los deja justo en el límite. Ahora cuenta solo si se pasan más de 0,01 rad. El deslizamiento medido cada 20 ms se inflaba con el temblor; ahora se mide en ventanas de 0,3 s, como en `physics/README.md`.
+- Adelantar el objetivo de cada motor por la amortiguación (`kv/kp × velocidad`) no bajó el error (0,123 → 0,133 rad): el retraso es de inercia, no de amortiguación.
+- **La referencia limpia no aceleró el aprendizaje:** a los 5 M pasos, 0,93 s contra 0,9 s de `walk-v2`. Los dos errores de la referencia eran reales, pero no eran lo que frenaba.
+- **Por qué terminan los episodios** (40 episodios desde instantes al azar): sin entrenar, 33 por caída y 7 por alejarse del recorrido; a los 10 M, 6 por caída, 33 por alejarse del recorrido (la pelvis a más de 0,6 m de la referencia) y 1 completo. La red aprendió a no caerse, pero no da los pasos para avanzar con la referencia. El techo de ~1 s es ese corte: la referencia avanza a 0,59 m/s y se aleja 0,6 m en 1,0 s. Los 0,9 s de `walk-v2` probablemente son el mismo techo. La recompensa de los pies queda en 0,02 de 0,15: los pies no van donde la referencia pide.
+- La carrera (`correr-perfil`) no sirve como referencia por ahora: el pie "apoyado" se mueve a 2,3 m/s, casi lo mismo que la pelvis. Es la profundidad de MediaPipe, ya anotada como límite en `data/`.
 
 ## Decisiones
 
@@ -51,6 +79,9 @@ Propuestas por Pastor, pendientes del equipo. Cuando se acepten, van a [`../deci
 - Los mundos se definen una sola vez en `physics/worlds/` y los leen el entrenamiento y la web, para que lo que se ve sea lo que se entrenó.
 - Las precargadas salen del mismo flujo que un video de usuario (no se hacen a mano).
 - El plan no reparte tareas: lo reparte el equipo.
+- La limpieza de la referencia vive en `imitate.Motion`, porque depende del modelo de entrenamiento (las esferas de sus pies). El navegador (SIM-1) tiene que repetir exactamente esa limpieza.
+- Contrato propuesto: el servidor pone sus propios ids a los clips de la cámara (los ids nombran archivos), entrena de a uno con 3 en espera (~30 min cada uno: el último espera hora y media), no entrena dos veces el mismo clip, y exige `valid_ratio` de 0,8 para entrenar (por debajo, el cuerpo falta en más de 1 cuadro de cada 5). Tope de 5 MB por clip: uno de 30 s a 30 cuadros por segundo pesa ~0,9 MB.
+- La posición de la pelvis de la referencia respecto de la del robot es fácil en simulación; un robot real necesitaría odometría para saberla. Queda anotado para cuando se trabaje el paso a un robot real.
 
 ## Sigue
 
@@ -59,4 +90,8 @@ El detalle está en [`../plan-producto.md`](../plan-producto.md). En corto:
 - El equipo: revisar el pitch y el plan, y repartir las tareas.
 - Primero, el cambio de contrato, en un commit aparte.
 - Lo crítico: que la imitación aprenda la caminata (ENT-1), con punto de control el sábado a las 12:00.
-- Antes de tocar `training/` o `physics/src/policy.js` desde esta rama, traer `5f29ace`.
+- ENT-1, próximas pruebas, de la más directa a la de respaldo:
+  1. Sumar a la observación la referencia más adelante (0,1 y 0,25 s), para que la red se anticipe al retraso de 60 a 100 ms de los motores y dé el paso a tiempo. Cambia `obs_dim`, así que hay que decidirlo antes de SIM-1.
+  2. Un movimiento en el lugar (jumping jacks, brazos, baile sin desplazarse): no tiene recorrido del que alejarse, que es justo donde falla hoy. Se puede grabar con la página de `data/live` (tiene botón Grabar), pasar por `npm run retarget` y revisar con `diagnose_reference.py`.
+  3. Más pasos (30 M o más) en las dos Macs, si la curva sigue subiendo con 1 o 2.
+- El cambio en `imitate.Motion` afecta a cualquier entrenamiento de imitación nuevo: avisar a quien esté entrenando antes de shipearlo.

@@ -35,8 +35,8 @@ def slide(n, kind, body, label=""):
 
 S = []
 
-# Una idea por lámina y poco texto: 30 s de pitch (1-3), la demo (4) y el cierre (5-7).
-# Las imágenes son capturas del G1 real de la landing desplegada, no stock (marca.md, punto 3).
+# Un minuto de pitch (láminas 1-6), 2 min de video (7) y el cierre (8-10).
+# Solo la portada va en inglés; el resto, en español.
 
 SKELETON = """<svg class="flow" viewBox="0 0 760 300" role="img"
    aria-label="Un video se convierte en un esqueleto de 33 puntos, ese movimiento entra al robot, y sin física el robot se cae">
@@ -71,53 +71,94 @@ SKELETON = """<svg class="flow" viewBox="0 0 760 300" role="img"
 S.append(slide(1, "dark split cover", """
   <div class="words">
     <p class="kicker">Platanus Hack 26 · Three Dimensions</p>
-    <h1>Robots que<br>aprenden<br>de un video</h1>
+    <h1>Physical&nbsp;AI<br>is the<br>new sexy</h1>
+    <p class="knife">Pensar ya se resolvió en un servidor.<br><em>Moverse se resuelve caminando.</em></p>
     <p class="meta"><span>Tridi</span><span>Cesar · Juan · Pastor · Ale</span></p>
   </div>
   <figure class="shot"><img src="img/g1-de-pie.jpg" alt="El Unitree G1 simulado, de pie"></figure>""",
-  "0:00 · 4 s"))
+  "0:00 · 9 s"))
 
 S.append(slide(2, "dark statement", """
-  <h2>La IA aprendió a hablar<br>leyendo internet.<br>
-      <em>La física no tiene<br>un internet de movimiento.</em></h2>""",
-  "0:04 · 12 s"))
+  <h2>Un bug<br>se revierte.<br><em>Una caída, no.</em></h2>
+  <p class="es">La gravedad no acepta otro intento. Lo que funciona en un simulador limpio no
+     sobrevive afuera: <b>89 % de éxito en el banco de simulación, 12 % en tareas reales</b>.
+     Y una línea parada cuesta <b>2,3 millones de dólares la hora</b>.</p>""",
+  "0:09 · 7 s"))
 
-S.append(slide(3, "paper split-v key", """
+S.append(slide(3, "dark statement", """
+  <h2>Los robots<br>ya tienen cuerpo.<br><em>Les falta experiencia.</em></h2>
+  <p class="es">Hoy se la enseñan con trajes de captura, en un estudio,
+     sobre un piso que en la calle no existe.</p>""",
+  "0:16 · 8 s"))
+
+S.append(slide(4, "paper split-v key", """
   <div class="words">
     <h2>Si copia el video,<br><em>se cae.</em></h2>
-    <p class="punch">El video le dice <em>qué</em> hacer.<br>La simulación le enseña <em>cómo</em>.</p>
+    <p class="punch">El video le dice <em>qué</em> hacer.<br>La física le enseña <em>cómo</em>.</p>
   </div>
-  """ + SKELETON, "0:16 · 14 s"))
+  """ + SKELETON, "0:24 · 14 s"))
 
-S.append(slide(4, "dark demo", """
-  <p class="kicker">Demo</p>
-  <h1>2:30</h1>
-  <p class="trio"><span>Capture</span><span>Gym</span><span>Policy</span></p>""",
-  "0:30"))
-
-S.append(slide(5, "paper", """
-  <p class="kicker">Lo que acaban de ver, medido</p>
-  <div class="stat-row four">
-    <div class="stat"><b>3,2 cm</b><span>error al pasar el movimiento al robot</span></div>
-    <div class="stat"><b>73 min</b><span>de entrenamiento en una laptop</span></div>
-    <div class="stat"><b>4 de 4</b><span>empujones de 250 N que aguanta</span></div>
-    <div class="stat"><b>265 KB</b><span>la red que mueve 29 motores</span></div>
-  </div>""", "Al terminar la demo"))
+S.append(slide(5, "dark worldslide", """
+  <p class="kicker">Nuestro motor</p>
+  <h2>Los pisos perfectos<br>no existen</h2>
+  <ul class="places">
+    <li><b>Acera</b><span>plano, fricción normal</span></li>
+    <li><b>Piedras</b><span>el suelo deja de ser plano</span></li>
+    <li><b>Recién trapeado</b><span>fricción baja</span></li>
+    <li><b>Pradera con viento</b><span>fuerza lateral constante</span></li>
+  </ul>
+  <p class="es">Un demo se hace en el vacío. Un robot, con fricción.</p>""",
+  "0:38 · 7 s"))
 
 S.append(slide(6, "paper", """
+  <p class="kicker">Tres piezas</p>
+  <div class="cols trio-cols">
+    <div class="col"><p class="product">Capturar</p>
+      <p>Video a esqueleto 3D, y al cuerpo del robot.</p><p class="num">3,2 cm</p></div>
+    <div class="col"><p class="product">Entrenar</p>
+      <p>Millones de intentos con física real.</p><p class="num">40 M pasos · 73 min</p></div>
+    <div class="col"><p class="product">Entregar</p>
+      <p>Una red que corre en tu navegador.</p><p class="num">265 KB</p></div>
+  </div>""", "0:45 · 5 s"))
+
+S.append(slide(7, "paper", """
+  <p class="kicker">El negocio</p>
+  <h2>Vendemos movimiento,<br>no robots</h2>
+  <div class="cols trio-cols">
+    <div class="col"><p class="product">Cliente ideal</p>
+      <p>Humanoides con hardware y sin datos de movimiento.</p></div>
+    <div class="col"><p class="product">Primer cliente</p>
+      <p>Los laboratorios que ya pagan por datos, por hora.</p></div>
+    <div class="col"><p class="product">Qué compran</p>
+      <p>La política entrenada y el movimiento corregido por la física.</p></div>
+  </div>
+  <div class="stat-row tam">
+    <div class="stat"><b>2,7 mil M</b><span>USD en datos de entrenamiento, 2026</span></div>
+    <div class="stat"><b>+100 M</b><span>USD al año ya se gastan en datos de robótica</span></div>
+    <div class="stat"><b>≈ 0</b><span>nuestro costo por hora: no pagamos por grabar</span></div>
+  </div>""", "0:50 · 13 s"))
+
+S.append(slide(8, "paper", """
   <p class="kicker">Para equipos de humanoides</p>
   <h2>Dónde estamos</h2>
   <ol class="road big">
     <li><span>Hoy</span><b>Se para y aguanta empujones</b></li>
     <li><span>Entrenando</span><b>Caminar como la persona del video</b></li>
-    <li><span>Lo que viene</span><b>Piedras, viento y piso resbaloso</b></li>
+    <li><span>Lo que viene</span><b>Entrenar en los cuatro mundos, no solo probar</b></li>
   </ol>
-  <p class="foot-note">La física es de MuJoCo; nuestro es todo lo que va encima. Y no es un LLM.</p>""",
+  <p class="foot-note">La física es de MuJoCo; nuestro es todo lo que va encima. Y no es un LLM:
+     el LLM decide a dónde ir, nosotros enseñamos a llegar sin caerse.</p>""",
   "Preguntas"))
 
-S.append(slide(7, "dark split end", """
+S.append(slide(9, "dark demo", """
+  <p class="kicker">Demo</p>
+  <h1>2:00</h1>
+  <p class="trio"><span>Capture</span><span>Gym</span><span>Policy</span></p>""",
+  "Penúltima · 2:00"))
+
+S.append(slide(10, "dark split end", """
   <div class="words">
-    <p class="kicker">Pruébenlo ahora</p>
+    <p class="kicker">Pruébenlo ahora · empújenlo</p>
     <h2>tridi-alpha<br>.vercel.app</h2>
     <p class="meta"><span>Abierto en GitHub</span><span>platanus-hack/…-ve-team-26</span></p>
   </div>
@@ -227,8 +268,26 @@ tr.on td{color:var(--signal);font-weight:500}
 .road.big li{align-items:center}
 .road.big span{flex:0 0 200px;font-size:13px}
 .road.big b{font-size:40px;font-weight:500;letter-spacing:-.02em}
+
+.knife{margin:0;max-width:26ch;font:500 26px/1.2 var(--display);color:var(--fg)}
+.knife em{font-style:normal;color:var(--signal)}
+.statement .es{margin:0;max-width:52ch;font:400 21px/1.4 var(--display);color:var(--fg-2)}
+.places{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(4,1fr);gap:28px}
+.places li{border-top:2px solid var(--fg);padding-top:14px}
+.places b{display:block;font-size:25px;font-weight:600;letter-spacing:-.015em;line-height:1.05}
+.places span{display:block;margin-top:10px;font:400 14px/1.4 var(--mono);color:var(--dim)}
+
+.dark .es{margin:0;font:400 19px/1.4 var(--display);color:var(--fg-2)}
+.split.cover h1{font-size:82px}
+.split.end h2{font-size:58px;word-break:break-word}
 .lede.wide{max-width:62ch;font-size:21px}
 .stat-row.four{gap:40px}
+.trio-cols .col p{font-size:19px}
+.trio-cols .col .num{margin-top:14px}
+.statement .es b{font-weight:600;color:var(--fg)}
+.stat-row.tam{border-top:1px solid rgb(13 13 11/.14);padding-top:18px;gap:44px}
+.stat-row.tam .stat b{font-size:34px}
+.stat-row.tam .stat span{font-size:14px;max-width:30ch}
 .stat-row.four .stat b{font-size:52px}
 .stat-row.four .stat span{font-size:17px}
 .beats.light li{border-color:var(--fg)}

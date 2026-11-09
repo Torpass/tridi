@@ -138,6 +138,7 @@ html.is-landing.lenis body {
 
 .film.ready ~ .film-hud.is-closing {
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 
@@ -189,6 +190,10 @@ html.is-landing.lenis body {
   text-transform: uppercase;
   color: var(--fg-2);
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+  pointer-events: none;
+}
+
+.film.ready ~ .film-hud:not(.is-closing) .sim-readout {
   pointer-events: auto;
 }
 
@@ -1387,14 +1392,14 @@ html.is-landing.lenis body {
   position: relative;
   z-index: 2;
   display: grid;
-  gap: 56px;
+  gap: 24px;
   width: 100%;
   max-width: 1200px;
-  margin: clamp(160px, 22vh, 260px) auto 0;
-  padding: 28px 28px 40px;
-  border-top: 0;
-  border-radius: var(--r-2) var(--r-2) 0 0;
-  background: linear-gradient(180deg, rgb(8 9 11 / 0.92), rgb(8 9 11 / 0.98));
+  margin: clamp(180px, 24vh, 280px) auto 0;
+  padding: 22px 28px 26px;
+  border-top: 1px solid var(--line-dark);
+  border-radius: 0;
+  background: linear-gradient(180deg, rgb(8 9 11 / 0.94), rgb(8 9 11 / 0.99));
 }
 
 .footer > p {
@@ -1409,12 +1414,13 @@ html.is-landing.lenis body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  padding-top: 28px;
-  border-top: 1px solid var(--line-dark);
+  padding-top: 0;
+  border-top: 0;
 }
 
 .wordmark.big {
-  font-size: clamp(64px, 11vw, 160px);
+  font-size: clamp(56px, 8.5vw, 112px);
+  line-height: 0.95;
 }
 
 .foot-specs {

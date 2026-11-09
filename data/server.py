@@ -66,17 +66,24 @@ KEEP_VIDEO_S = 10 * 60
 UPLOAD_TTL_S = 60 * 60
 JANITOR_EVERY_S = 30
 
-# Browsers on these origins may call the API: the deployed web and the Vite dev servers.
-# Override with TRIDI_CORS_ORIGINS (comma separated).
+# Browsers on these origins may call the API: the deployed web, custom domains, and local Vite servers.
+# Override with TRIDI_CORS_ORIGINS (comma separated) or TRIDI_CORS_ORIGIN_REGEX.
 CORS_ORIGINS = os.environ.get(
-    "TRIDI_CORS_ORIGINS", "https://tridi-alpha.vercel.app,http://localhost:5173,http://localhost:5174"
+    "TRIDI_CORS_ORIGINS",
+    "https://trytridi.com,https://www.trytridi.com,https://tridi-18p.pages.dev,https://tridi-alpha.vercel.app,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174",
 ).split(",")
+CORS_ORIGIN_REGEX = os.environ.get(
+    "TRIDI_CORS_ORIGIN_REGEX",
+    r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://([a-z0-9-]+\.)*([a-z0-9-]*tridi[a-z0-9-]*\.(com|run|ai|dev|app|tech|xyz|vercel\.app))$",
+)
 
 ID = re.compile(r"^[0-9a-f]{32}$")
 CLIP_ID = re.compile(r"^clip_[A-Za-z0-9_-]+$")
 POLICY_ID = re.compile(r"^clip_[A-Za-z0-9_-]+-step-\d+$")
 
 ROOT = Path(__file__).resolve().parent.parent
+GVHMR_PYTHON = Path(os.environ.get("GVHMR_ROOT", ROOT / "data" / "thirdparty" / "GVHMR")) / ".venv" / "bin" / "python"
+WILOR_PYTHON = Path(os.environ.get("WILOR_ROOT", ROOT / "data" / "thirdparty" / "WiLoR")) / ".venv" / "bin" / "python"
 
 # Camera clips (POST /clips). A 30 s PoseClip at 30 fps weighs ~0.9 MB (measured on data/clips/):
 # 5 MB leaves room without accepting anything. Below 0.8 valid_ratio the body was missing in more
@@ -97,6 +104,15 @@ TRAIN_STEPS_PER_S = 11_400  # an M2, for the estimate before the first progress 
 DATA_STAGE_S = 60  # retarget + dataset rollout + delivery (~2 s), a rough estimate for eta_s
 TRAIN_POLL_S = 2
 UPLOAD_EXTS = VIDEO_EXTS | {".zip"}
+
+# Abuse & disk caps (same model as sound-shaper's media-worker, without requiring Firebase):
+# 16 unfinished uploads * 60 MB = < 1 GB disk at any time; 8 queued video jobs max; 20 write
+# requests/min per IP (POST /uploads, /clips, /clips/*/train) behind the Cloudflare tunnel.
+MAX_ACTIVE_UPLOADS = int(os.environ.get("TRIDI_MAX_ACTIVE_UPLOADS", 16))
+MAX_PENDING_JOBS = int(os.environ.get("TRIDI_MAX_PENDING_JOBS", 8))
+WRITE_RATE_PER_MIN = int(os.environ.get("TRIDI_WRITE_RATE_PER_MIN", 20))
+WRITE_WINDOW_S = 60.0
+_write_hits: dict[str, list[float]] = {}
 
 # The files of a delivery (docs/contrato.md, "La entrega de un clip"): only these names are served.
 DELIVERY_FILES = {
@@ -187,6 +203,66 @@ def _get(table: dict, key: str, what: str):
 # --- Worker -------------------------------------------------------------------------------------
 
 
+def _use_capture2(subject: Subject) -> bool:
+    """Whether to run Capture 2.0 (GVHMR + WiLoR -> PoseClip v2) instead of MediaPipe v1."""
+    mode = os.environ.get("TRIDI_CAPTURE", "v2").lower()
+    if mode == "v1":
+        return False
+    # GVHMR tracks the main subject automatically; if the user clicked a secondary person in a
+    # multi-person video, use the tracked box + MediaPipe lift for that specific track_id.
+    return GVHMR_PYTHON.exists() and subject.selected_by == "auto"
+
+
+def _lift_capture2(job: Job, video: Video, subject: Subject) -> dict:
+    """Runs GVHMR + WiLoR + to_poseclip.py on `video.path` and writes PoseClip v2 to DATA_DIR/clips."""
+    work_dir = job.dir / f"cap2_{video.path.stem}"
+    work_dir.mkdir(parents=True, exist_ok=True)
+    gvhmr_npz = work_dir / f"{video.path.stem}.gvhmr.npz"
+    wilor_npz = work_dir / f"{video.path.stem}.wilor.npz"
+    video.progress = 0.05
+    res = subprocess.run(
+        [str(GVHMR_PYTHON), str(ROOT / "data" / "capture2" / "gvhmr_mac.py"), str(video.path), "--out", str(gvhmr_npz)],
+        capture_output=True, text=True,
+    )
+    if res.returncode != 0 or not gvhmr_npz.exists():
+        tail = (res.stderr or res.stdout or "").strip().splitlines()[-1:] or ["falló GVHMR"]
+        raise RuntimeError(f"no se pudo reconstruir el cuerpo 3D (GVHMR): {tail[0][:240]}")
+    video.progress = 0.55
+    hands_args: list[str] = []
+    if WILOR_PYTHON.exists():
+        res_w = subprocess.run(
+            [str(WILOR_PYTHON), str(ROOT / "data" / "capture2" / "wilor_mac.py"), str(video.path), "--out", str(wilor_npz)],
+            capture_output=True, text=True,
+        )
+        if res_w.returncode == 0 and wilor_npz.exists():
+            hands_args = ["--hands", str(wilor_npz)]
+    video.progress = 0.85
+    out_clips = work_dir / "clips"
+    res_p = subprocess.run(
+        [str(GVHMR_PYTHON), str(ROOT / "data" / "capture2" / "to_poseclip.py"), str(gvhmr_npz), *hands_args, "--out-dir", str(out_clips)],
+        capture_output=True, text=True,
+    )
+    produced = sorted(out_clips.glob("clip_*.json")) if out_clips.exists() else []
+    if res_p.returncode != 0 or not produced:
+        tail = (res_p.stderr or res_p.stdout or "").strip().splitlines()[-1:] or ["falló to_poseclip"]
+        raise RuntimeError(f"no se pudo armar el PoseClip v2: {tail[0][:240]}")
+    clip = json.loads(produced[0].read_text())
+    (DATA_DIR / "clips").mkdir(parents=True, exist_ok=True)
+    clip_id = _clip_id(video.name, DATA_DIR / "clips")
+    clip.update({
+        "id": clip_id,
+        "source": "upload",
+        "source_file": video.name,
+        "subject": {"track_id": subject.track_id, "selected_by": subject.selected_by},
+    })
+    (DATA_DIR / "clips" / f"{clip_id}.json").write_text(json.dumps(clip, separators=(",", ":")))
+    npz_src = produced[0].with_suffix(".npz")
+    if npz_src.exists():
+        shutil.move(str(npz_src), str(DATA_DIR / "clips" / f"{clip_id}.npz"))
+    shutil.rmtree(work_dir, ignore_errors=True)
+    return clip
+
+
 def _process_video(job: Job, video: Video) -> None:
     def progress(stage: str, i: int, total: int) -> None:
         video.stage = "tracking" if stage == "tracking" else "pose3d"
@@ -216,8 +292,12 @@ def _process_video(job: Job, video: Video) -> None:
         for t in video.tracking.people_at_first_frame()
     ]
     video.stage, video.progress = "pose3d", 0.0
-    lifted = lift_subject(video.path, video.tracking, subject, progress)
-    _, clip = write_clip(video.tracking, subject, lifted, video.name, DATA_DIR / "clips")
+    if _use_capture2(subject):
+        clip = _lift_capture2(job, video, subject)
+        lifted = lift_subject(video.path, video.tracking, subject)
+    else:
+        lifted = lift_subject(video.path, video.tracking, subject, progress)
+        _, clip = write_clip(video.tracking, subject, lifted, video.name, DATA_DIR / "clips")
     write_scene(scene_of(video.path, lifted, video.tracking.fps, clip["id"]), DATA_DIR / "scenes")
     video.clip_id = clip["id"]
     video.valid_ratio = clip["quality"]["valid_ratio"]
@@ -267,7 +347,31 @@ def sweep(now: float) -> None:
         if now - up.touched > UPLOAD_TTL_S:
             shutil.rmtree(up.dir, ignore_errors=True)
             uploads.pop(up.id, None)
+    with lock:
+        for ip in list(_write_hits):
+            _write_hits[ip] = [t for t in _write_hits[ip] if now - t < WRITE_WINDOW_S]
+            if not _write_hits[ip]:
+                del _write_hits[ip]
     relay.sweep(now)  # phone camera sessions without traffic
+
+
+def _check_write_rate(request: Request) -> None:
+    """Per-IP sliding window on write endpoints (CF-Connecting-IP from Cloudflare tunnel, else socket IP).
+    Localhost and testclient are exempt so automated checks can run back-to-back."""
+    ip = (
+        request.headers.get("cf-connecting-ip")
+        or (request.client.host if request.client else "unknown")
+    ).strip()
+    if ip in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return
+    now = time.time()
+    with lock:
+        hits = [t for t in _write_hits.get(ip, []) if now - t < WRITE_WINDOW_S]
+        if len(hits) >= WRITE_RATE_PER_MIN:
+            _write_hits[ip] = hits
+            raise HTTPException(429, f"demasiadas solicitudes seguidas ({WRITE_RATE_PER_MIN}/min): espera un minuto")
+        hits.append(now)
+        _write_hits[ip] = hits
 
 
 def _enqueue(job: Job, only: int | None = None) -> None:
@@ -311,7 +415,24 @@ def _unpack(upload: Upload, job_dir: Path, assembled: Path) -> list[Video]:
 
 
 app = FastAPI(title="Tridi data server")
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_origin_regex=CORS_ORIGIN_REGEX,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.middleware("http")
+async def _security_headers(request: Request, call_next):
+    res = await call_next(request)
+    res.headers.setdefault("X-Content-Type-Options", "nosniff")
+    res.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+    res.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return res
+
+
 app.include_router(relay.router)  # the phone as the live camera (docs/contrato.md)
 
 
@@ -331,7 +452,10 @@ def health() -> dict:
 
 
 @app.post("/uploads", status_code=201)
-def create_upload(body: NewUpload) -> dict:
+def create_upload(body: NewUpload, request: Request) -> dict:
+    _check_write_rate(request)
+    if len(uploads) >= MAX_ACTIVE_UPLOADS:
+        raise HTTPException(429, f"hay {MAX_ACTIVE_UPLOADS} subidas en curso: intenta en un minuto")
     ext = Path(body.filename).suffix.lower()
     if ext not in UPLOAD_EXTS:
         raise HTTPException(415, f"tipo no soportado ({ext or 'sin extensión'}): sube {', '.join(sorted(UPLOAD_EXTS))}")
@@ -379,6 +503,9 @@ def get_upload(upload_id: str) -> dict:
 @app.post("/uploads/{upload_id}/complete", status_code=202)
 def complete_upload(upload_id: str) -> dict:
     up: Upload = _get(uploads, upload_id, "la subida")
+    with lock:
+        if len(pending) >= MAX_PENDING_JOBS:
+            raise HTTPException(429, f"la cola de videos está llena ({MAX_PENDING_JOBS} en espera): intenta en un momento")
     missing = sorted(set(range(up.total_chunks)) - up.received)
     if missing:
         raise HTTPException(409, f"faltan {len(missing)} pedazos, el primero es el {missing[0]}")
@@ -502,6 +629,7 @@ def _clip_path(clip_id: str) -> Path:
 
 @app.post("/clips", status_code=201)
 async def post_clip(request: Request) -> dict:
+    _check_write_rate(request)
     body = bytearray()
     async for part in request.stream():
         body += part
@@ -822,7 +950,8 @@ def _position_eta(t: Train) -> tuple[int, float]:
 
 
 @app.post("/clips/{clip_id}/train", status_code=202)
-def train_clip(clip_id: str) -> dict:
+def train_clip(clip_id: str, request: Request) -> dict:
+    _check_write_rate(request)
     path = _clip_path(clip_id)
     with lock:
         existing = train_by_clip.get(clip_id)

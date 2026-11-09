@@ -19,6 +19,7 @@ import zipfile
 from pathlib import Path
 
 os.environ.setdefault("TRIDI_DATA_DIR", tempfile.mkdtemp(prefix="tridi-server-"))
+os.environ.setdefault("TRIDI_CAPTURE", "v1")
 
 from fastapi.testclient import TestClient  # noqa: E402
 

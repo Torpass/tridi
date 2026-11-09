@@ -130,6 +130,7 @@ export function dressTelemetry(view) {
       group.visible = opacity > 0.01;
       if (!group.visible) return;
       const { sim } = view;
+      if (sim.policy?.robot && sim.policy.robot !== 'unitree_g1') return;
       grid.material.uniforms.uTime.value = clock.getElapsedTime();
       grid.material.uniforms.uOpacity.value = opacity;
       flat.opacity = 0.85 * opacity;

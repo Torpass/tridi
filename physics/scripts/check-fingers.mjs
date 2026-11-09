@@ -7,11 +7,15 @@ import * as THREE from 'three';
 import { createFingerSolver } from '../src/fingers.js';
 
 const hands = JSON.parse(readFileSync(new URL('../models/dex3/hands.json', import.meta.url)));
+const inspireHands = JSON.parse(readFileSync(new URL('../models/inspire/hands.json', import.meta.url)));
 const solver = createFingerSolver(hands);
+const inspireSolver = createFingerSolver(inspireHands);
 // Within this of the pose the hand was built from, per joint: the Dex3's ranges run 60 to 100
 // degrees, so 12 tells a bent finger from a straight one with room to spare.
 const TOLERANCE_DEG = 12;
 const FINGERTIP_M = 0.04; // how far past its last joint the fingertip point sits
+// Escalon 2 ready metric (docs/plan-v2.md, section 6): fingertip error < 2 cm on the robot hand.
+const MAX_FINGERTIP_ERROR_M = 0.02;
 
 const failures = [];
 const expect = (ok, what) => {
@@ -115,6 +119,85 @@ for (const side of ['left', 'right']) {
   const bent = ['index', 'middle'].every((f) => Math.abs(got.get(`${side}_hand_${f}_1_joint`)) > 1.2);
   // 30 degrees is where the Dex3's thumb runs out of range (measured); 40 leaves noise room.
   expect(thumbOff < 40 && bent, `${side}: thumb ${thumbOff.toFixed(0)} degrees from the person's, index and middle closed: ${bent}`);
+}
+
+// 5-finger Inspire hand (models/inspire/hands.json): counting 1 to 5 fingers independently and
+// verifying Escalon 2's fingertip error metric (< 2 cm on the robot hand).
+console.log('5-finger Inspire hand: counting 1 to 5 fingers independently (fingertip error < 2 cm)');
+function personHand5(side, angles, place) {
+  const P = Array.from({ length: 21 }, () => new THREE.Vector3());
+  const finger = (base, mid, points) => {
+    const a = inspireSolver.origin(side, angles, base);
+    const b = inspireSolver.origin(side, angles, mid);
+    const tip = b.clone().addScaledVector(inspireSolver.segment(side, angles, mid), FINGERTIP_M);
+    [P[points[0]], P[points[1]], P[points[2]], P[points[3]]] = [a, b, b.clone().lerp(tip, 0.5), tip];
+  };
+  P[0].set(0, 0, 0);
+  finger('index_0', 'index_1', [5, 6, 7, 8]);
+  finger('middle_0', 'middle_1', [9, 10, 11, 12]);
+  finger('ring_0', 'ring_1', [13, 14, 15, 16]);
+  finger('pinky_0', 'pinky_1', [17, 18, 19, 20]);
+  P[1].copy(inspireSolver.origin(side, angles, 'thumb_0'));
+  P[2].copy(inspireSolver.origin(side, angles, 'thumb_1'));
+  P[3].copy(inspireSolver.origin(side, angles, 'thumb_2'));
+  P[4].copy(P[3]).addScaledVector(inspireSolver.segment(side, angles, 'thumb_2'), FINGERTIP_M);
+  return P.map((p) => p.applyQuaternion(place.turn).add(place.at));
+}
+
+function anglesOf5(side, pose) {
+  const angles = new Map();
+  for (const b of inspireSolver.joints(side)) {
+    const short = b.name.replace(`${side}_hand_`, '').replace('_link', '');
+    const [lo, hi] = b.range;
+    const bend = pose[short] ?? 0;
+    const value = short === 'thumb_0' ? bend : Math.abs(hi) >= Math.abs(lo) ? bend * hi : bend * lo;
+    angles.set(b.joint, THREE.MathUtils.clamp(value, lo, hi));
+  }
+  return angles;
+}
+
+const COUNT_POSES = {
+  'count 1 (index)': { middle_0: 1, middle_1: 1, ring_0: 1, ring_1: 1, pinky_0: 1, pinky_1: 1, thumb_1: 0.6, thumb_2: 0.8 },
+  'count 2 (index + middle)': { ring_0: 1, ring_1: 1, pinky_0: 1, pinky_1: 1, thumb_1: 0.6, thumb_2: 0.8 },
+  'count 3 (index + middle + ring)': { pinky_0: 1, pinky_1: 1, thumb_1: 0.6, thumb_2: 0.8 },
+  'count 4 (four fingers)': { thumb_1: 0.6, thumb_2: 0.8 },
+  'count 5 (all five open)': {},
+};
+
+for (const [name, pose] of Object.entries(COUNT_POSES)) {
+  for (const side of ['left', 'right']) {
+    inspireSolver.reset();
+    const truth = anglesOf5(side, pose);
+    const pts = personHand5(side, truth, PLACES[1]);
+    const got = inspireSolver.solve(side, pts);
+    const errs = Object.values(inspireSolver.fingertipErrors(side, got, pts));
+    const maxTipErr = Math.max(...errs);
+    expect(maxTipErr < MAX_FINGERTIP_ERROR_M, `${side}, ${name}: max fingertip error ${(maxTipErr * 100).toFixed(2)} cm (under 2.0 cm)`);
+  }
+}
+
+console.log('Capture 2.0 real hand clips (clip_dedos-01-gvhmr, clip_saludar-02-gvhmr) on 5-finger Inspire hand');
+for (const clipId of ['clip_dedos-01-gvhmr', 'clip_saludar-02-gvhmr']) {
+  const clip = JSON.parse(readFileSync(new URL(`../../web/clips/${clipId}.json`, import.meta.url)));
+  const tipErrs = [];
+  for (const side of ['left', 'right']) {
+    inspireSolver.reset();
+    for (const f of clip.frames ?? []) {
+      const raw = f.hands?.[side];
+      if (!raw || raw.length < 21) continue;
+      // Convert camera frame [x right, y down, z away] to robot frame [x forward, y left, z up]
+      const pts = raw.map(([px, py, pz]) => new THREE.Vector3(pz, -px, -py));
+      const got = inspireSolver.solve(side, pts);
+      tipErrs.push(...Object.values(inspireSolver.fingertipErrors(side, got, pts)));
+    }
+  }
+  tipErrs.sort((a, b) => a - b);
+  const medianM = tipErrs[Math.floor(tipErrs.length * 0.5)];
+  const p90M = tipErrs[Math.floor(tipErrs.length * 0.9)];
+  expect(
+    medianM < MAX_FINGERTIP_ERROR_M,
+    `${clipId}: median fingertip error ${(medianM * 100).toFixed(2)} cm, p90 ${(p90M * 100).toFixed(2)} cm across ${tipErrs.length} finger samples (under 2.0 cm)`,
+  );
 }
 
 if (failures.length) {

@@ -43,6 +43,12 @@ const ROOT_ORDER = 2;
 const CAM_WINDOW_S = 0.5;
 const CAM_OUTLIER_M = 1.5;
 
+// Foot contact thresholds (docs/contrato.md, matching data/capture2/to_poseclip.py): a foot is
+// planted when its heel or big toe is within 2 cm of the floor and its horizontal speed <= 0.15 m/s.
+const CONTACT_HEIGHT_M = 0.02;
+const CONTACT_SPEED_MPS = 0.15;
+const HAND_TIPS_MEDIAPIPE = { left: [17, 19, 21], right: [18, 20, 22] };
+
 // The contract fixes one fps per clip; webcams deliver uneven frame times, so the clip is resampled.
 export const CLIP_FPS = 30;
 
@@ -84,10 +90,19 @@ export function buildPoseClip(samples, { width, height, id = defaultId() }) {
     const b = valid[Math.min(j + 1, valid.length - 1)];
     const w = b.t > a.t ? Math.min(1, Math.max(0, (t - a.t) / (b.t - a.t))) : 0;
     const nearest = items.reduce((best, s) => (Math.abs(s.t - t) < Math.abs(best.t - t) ? s : best));
+    const lerpHand = (side) => {
+      const ha = a.hands?.[side];
+      const hb = b.hands?.[side];
+      if (!nearest.valid || (!ha && !hb)) return null;
+      return ha && hb ? lerp2(ha, hb, w) : (w < 0.5 ? ha : hb) ?? ha ?? hb;
+    };
+    const leftHand = lerpHand('left');
+    const rightHand = lerpHand('right');
     frames.push({
       world: lerp2(a.world, b.world, w),
       cam: lerp(a.cam, b.cam, w),
       vis: a.image.map((p, i) => (nearest.valid ? p[2] + (b.image[i][2] - p[2]) * w : 0)),
+      hands: leftHand || rightHand ? { left: leftHand, right: rightHand } : null,
       valid: nearest.valid,
     });
   }
@@ -112,8 +127,29 @@ export function buildPoseClip(samples, { width, height, id = defaultId() }) {
   // The contract's origin is the hips' center of the first frame.
   const hips0 = pos[0][23].map((v, i) => (v + pos[0][24][i]) / 2);
   const round = (v) => Math.round(v * 1e4) / 1e4;
+  const centered = pos.map((joints) => joints.map((p) => p.map((v, a) => v - hips0[a])));
+  const hasHands = frames.some((fr) => fr.hands?.left || fr.hands?.right);
+  const handsByFrame = frames.map((fr, k) => {
+    if (!fr.hands) return null;
+    const out = { left: null, right: null };
+    for (const [side, wristIdx] of [['left', 15], ['right', 16]]) {
+      const raw = fr.hands[side];
+      if (!raw) continue;
+      const flipped = raw.map(flip);
+      const w0 = flipped[0];
+      const wrist = centered[k][wristIdx];
+      out[side] = flipped.map((p) => [round(wrist[0] + p[0] - w0[0]), round(wrist[1] + p[1] - w0[1]), round(wrist[2] + p[2] - w0[2])]);
+      const [pIdx, iIdx, tIdx] = HAND_TIPS_MEDIAPIPE[side];
+      centered[k][pIdx] = [...out[side][20]];
+      centered[k][iIdx] = [...out[side][8]];
+      centered[k][tIdx] = [...out[side][4]];
+    }
+    return out;
+  });
+  const contacts = detectFootContacts(centered, CLIP_FPS);
   return {
     id,
+    version: 2,
     source: 'camera',
     source_file: null,
     fps: CLIP_FPS,
@@ -122,11 +158,23 @@ export function buildPoseClip(samples, { width, height, id = defaultId() }) {
     origin: 'hips',
     // One person, no tracker: MediaPipe follows the most prominent body, and the id is always 0.
     subject: { track_id: 0, selected_by: 'auto' },
-    frames: pos.map((joints, k) => ({
+    frames: centered.map((joints, k) => ({
       t: round(k / CLIP_FPS),
-      joints: joints.map((p, i) => [...p.map((v, a) => round(v - hips0[a])), round(frames[k].vis[i])]),
+      joints: joints.map((p, i) => [...p.map(round), round(frames[k].vis[i])]),
+      contacts: contacts[k],
+      ...(hasHands && handsByFrame[k] ? { hands: handsByFrame[k] } : {}),
     })),
-    quality: { valid_ratio: Math.round((frames.filter((fr) => fr.valid).length / n) * 1000) / 1000 },
+    quality: {
+      valid_ratio: Math.round((frames.filter((fr) => fr.valid).length / n) * 1000) / 1000,
+      ...(hasHands
+        ? {
+            hands_ratio: {
+              left: Math.round((handsByFrame.filter((h) => h?.left).length / n) * 1000) / 1000,
+              right: Math.round((handsByFrame.filter((h) => h?.right).length / n) * 1000) / 1000,
+            },
+          }
+        : {}),
+    },
   };
 }
 
@@ -261,6 +309,30 @@ function rootFromFeet(rel) {
     ]);
   }
   return root;
+}
+
+/**
+ * Per-frame foot contacts ({ left_foot, right_foot }), matching data/capture2/to_poseclip.py:
+ * a foot is planted when its heel or big toe is within CONTACT_HEIGHT_M of the 5th-percentile floor
+ * and its ankle horizontal speed is <= CONTACT_SPEED_MPS.
+ */
+function detectFootContacts(pos, fps) {
+  const lLow = pos.map((j) => Math.min(j[29][1], j[31][1]));
+  const rLow = pos.map((j) => Math.min(j[30][1], j[32][1]));
+  const both = pos.map((_, k) => Math.min(lLow[k], rLow[k])).sort((a, b) => a - b);
+  const floorY = both[Math.floor(both.length * 0.05)] ?? 0;
+  const sideContact = (low, ankleIdx) =>
+    pos.map((j, k) => {
+      const prev = pos[Math.max(0, k - 1)][ankleIdx];
+      const cur = j[ankleIdx];
+      const speed = k === 0 && pos.length > 1
+        ? Math.hypot(pos[1][ankleIdx][0] - cur[0], pos[1][ankleIdx][2] - cur[2]) * fps
+        : Math.hypot(cur[0] - prev[0], cur[2] - prev[2]) * fps;
+      return low[k] - floorY <= CONTACT_HEIGHT_M && speed <= CONTACT_SPEED_MPS;
+    });
+  const left = sideContact(lLow, 27);
+  const right = sideContact(rLow, 28);
+  return pos.map((_, k) => ({ left_foot: left[k], right_foot: right[k] }));
 }
 
 /**

@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 stop=0
 if [ "${1:-}" = stop ]; then stop=1; shift; fi
 port=${1:-8000}
-web=${TRIDI_WEB_URL:-https://tridi-alpha.vercel.app}
+web=${TRIDI_WEB_URL:-https://trytridi.com}
 # Juan's gist; its id is also SERVER_GIST in data/live/src/api.js. Only its owner can write it: anyone
 # else's serve.sh still works with the ?api= link it prints. TRIDI_GIST= (empty) skips it, for tests.
 gist=${TRIDI_GIST-78eb7f16b9c2d8d21a9abfe6607a98da}

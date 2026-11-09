@@ -8,6 +8,7 @@ import { loader } from './loader.js';
 import { createPushArrow } from './push-arrow.js';
 import { pushWhenReady } from './push.js';
 import { attachRobot, onRobotProgress, robotView } from './robot-host.js';
+import { T } from './strings-stage.js';
 
 /**
  * Markup for a robot pane; mountRobotPane fills it in.
@@ -20,10 +21,10 @@ export function robotPaneHTML(label, { push = true } = {}) {
       <div class="robot-loading">
         ${loader()}
         <div class="track"><div class="robot-progress"></div></div>
-        <p class="robot-status">Preparando el mundo de física…</p>
+        <p class="robot-status">${T('preparing')}</p>
       </div>
       <p class="pane-label">${label}</p>
-      ${push ? '<button class="push" type="button" disabled>Empujar al robot</button>' : ''}
+      ${push ? `<button class="push" type="button" disabled>${T('push')}</button>` : ''}
     </section>`;
 }
 
@@ -43,8 +44,8 @@ export function mountRobotPane(pane, { beforePush } = {}) {
 
   const stopProgress = onRobotProgress(({ done, total, compiling, policy }) => {
     $('.robot-progress').style.width = `${(100 * done) / total}%`;
-    if (policy) $('.robot-status').textContent = 'Enseñándole a mantenerse de pie…';
-    else if (compiling) $('.robot-status').textContent = 'Armando al robot…';
+    if (policy) $('.robot-status').innerHTML = T('teaching');
+    else if (compiling) $('.robot-status').innerHTML = T('building');
   });
   // Already loaded (any visit after the first): no loader and no fade, the robot is there.
   if (robotView()) pane.classList.add('ready', 'instant');
@@ -72,7 +73,7 @@ export function mountRobotPane(pane, { beforePush } = {}) {
       }
     })
     .catch((error) => {
-      $('.robot-status').textContent = 'No se pudo cargar el robot. Recarga la página para intentar de nuevo.';
+      $('.robot-status').innerHTML = T('loadFailed');
       console.error(error);
     });
 

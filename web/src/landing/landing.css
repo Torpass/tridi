@@ -24,6 +24,12 @@ html.is-landing.lenis body {
   --fg-2: var(--ink-soft);
   --dim: var(--muted);
   --gutter: clamp(var(--s-4), 3.4vw, var(--s-7));
+  /* Where the film's frame starts: the top bar ends at 68 px, and 20 px of air keep the live tag
+     and the corners from reading as part of the bar (they touched it before). */
+  --hud-top: 84px;
+  /* Every chapter's card starts at the exact same vertical height as the Hero's live chip. */
+  --card-top: calc(var(--hud-top) + var(--s-3));
+  --card-width: min(36vw, 500px);
   position: relative;
   color: var(--fg);
   font: 400 17px/1.5 var(--display);
@@ -76,6 +82,11 @@ html.is-landing.lenis body {
   display: block;
   opacity: 0;
   transition: opacity 1.2s;
+  cursor: grab !important;
+}
+
+.film > canvas:active {
+  cursor: grabbing !important;
 }
 
 .film.ready > canvas {
@@ -110,19 +121,24 @@ html.is-landing.lenis body {
 }
 
 /* The film's frame: viewfinder corners and the simulation's own readout (home.js updateReadout),
-   so the street reads as a simulation. Under the shade, which covers it with the rest of the film
-   at the close. */
+   so the street reads as a simulation. Above chapters (z-index 10) so the readout's info button
+   receives hover and click, and faded when the closing curtain rises. */
 .film-hud {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: 10;
   pointer-events: none;
   opacity: 0;
-  transition: opacity 0.6s;
+  transition: opacity 0.45s ease;
 }
 
 .film.ready ~ .film-hud {
   opacity: 1;
+}
+
+.film.ready ~ .film-hud.is-closing {
+  opacity: 0;
+  pointer-events: none;
 }
 
 .corner {
@@ -133,13 +149,13 @@ html.is-landing.lenis body {
 }
 
 .corner.tl {
-  top: 84px;
+  top: var(--hud-top);
   left: 16px;
   border-width: 1px 0 0 1px;
 }
 
 .corner.tr {
-  top: 84px;
+  top: var(--hud-top);
   right: 16px;
   border-width: 1px 1px 0 0;
 }
@@ -156,27 +172,88 @@ html.is-landing.lenis body {
   border-width: 0 1px 1px 0;
 }
 
-.sim-readout {
+.landing .sim-readout {
   position: absolute;
-  top: 88px;
   right: var(--gutter);
-  display: flex;
+  bottom: 32px; /* the film's own numbers sit low, inside the bottom corner, away from the bar */
+  display: inline-flex;
+  align-items: center;
   gap: 16px;
-  padding: 8px 14px;
+  padding: 10px 16px;
   border: 1px solid var(--line);
-  border-radius: var(--r-1);
-  background: rgb(8 9 11 / 0.55);
+  border-radius: var(--r-2);
+  background: rgb(8 9 11 / 0.72);
+  backdrop-filter: blur(12px);
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--fg-2);
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
+  pointer-events: auto;
 }
 
 .sim-readout b {
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
+}
+
+.sim-info-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  min-height: 18px;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(241 243 238 / 0.08);
+  color: var(--fg-2);
+  font: 600 12px/1 var(--display);
+  cursor: help;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.sim-info-btn:hover,
+.sim-info-btn:focus-visible,
+.sim-info-btn.open {
+  background: rgb(200 255 46 / 0.2);
+  color: var(--signal);
+  box-shadow: none;
+}
+
+.sim-tooltip {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 12px);
+  width: min(320px, 82vw);
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  background: rgb(8 9 11 / 0.94);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 16px 36px -12px rgb(0 0 0 / 0.85);
+  color: var(--fg);
+  font: 400 12px/1.45 var(--display);
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+}
+
+.sim-info-btn:hover .sim-tooltip,
+.sim-info-btn:focus-visible .sim-tooltip,
+.sim-info-btn.open .sim-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
 }
 
 .boot {
@@ -298,7 +375,7 @@ html.is-landing.lenis body {
   z-index: 20;
   display: flex;
   align-items: center;
-  gap: var(--s-6);
+  gap: 10px;
   padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
   border: 1px solid var(--line);
   border-radius: var(--r-2);
@@ -322,6 +399,7 @@ html.is-landing.lenis body {
   display: inline-flex;
   align-items: center;
   gap: 0.33em;
+  margin-right: auto;
   font: 700 24px/1 var(--display);
   color: var(--fg);
   text-decoration: none;
@@ -332,23 +410,61 @@ html.is-landing.lenis body {
   height: 1.17em;
 }
 
+.topbar .btn-small {
+  min-width: 136px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+  justify-content: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .topnav {
   display: flex;
-  gap: var(--s-6);
-  margin-left: auto;
+  align-items: center;
+  gap: 18px;
+  margin-right: 4px;
+  padding-right: 14px;
+  border-right: 1px solid var(--line);
   font: 500 12px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .topnav a {
-  color: var(--fg);
+  position: relative;
+  padding: 6px 2px;
+  color: var(--fg-2);
   text-decoration: none;
   transition: color 0.2s;
 }
 
+.topnav a::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+  transform: scaleX(0);
+  transform-origin: center;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 .topnav a:hover {
   color: var(--fg);
+}
+
+.topnav a.active {
+  color: var(--fg);
+}
+
+.topnav a.active::after {
+  transform: scaleX(1);
 }
 
 .live-dot {
@@ -404,7 +520,7 @@ html.is-landing.lenis body {
 }
 
 .product {
-  margin-bottom: 18px !important;
+  margin-bottom: 10px !important;
   font: 500 12px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -420,7 +536,7 @@ html.is-landing.lenis body {
 
 .hero-live {
   position: absolute;
-  top: 88px;
+  top: calc(var(--hud-top) + var(--s-3));
   left: var(--gutter);
   padding: 8px 14px 8px 12px;
   border: 1px solid var(--line);
@@ -456,8 +572,10 @@ html.is-landing.lenis body {
 }
 
 .hero-caption h1 {
-  font-size: clamp(40px, 5.6vw, 92px);
-  line-height: 0.92;
+  max-width: none;
+  white-space: nowrap;
+  font-size: clamp(34px, 4.7vw, 76px);
+  line-height: 0.94;
   text-shadow: 0 2px 30px rgb(0 0 0 / 0.35);
 }
 
@@ -469,8 +587,11 @@ html.is-landing.lenis body {
 }
 
 .hero-lede {
-  margin-top: 22px !important;
-  font-size: clamp(16px, 1.25vw, 19px);
+  max-width: 34em;
+  min-height: 3em;
+  margin-top: 20px !important;
+  font-size: clamp(16px, 1.2vw, 18px);
+  line-height: 1.5;
   color: var(--fg) !important;
   text-shadow: 0 1px 16px rgb(0 0 0 / 0.5);
 }
@@ -480,12 +601,14 @@ html.is-landing.lenis body {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 22px !important;
+  margin-top: 20px !important;
 }
 
 .hero-steps li {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  min-width: 148px;
   gap: 10px;
   padding: 8px 12px 8px 10px;
   border: 1px solid var(--line);
@@ -505,38 +628,51 @@ html.is-landing.lenis body {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 24px;
+  margin-top: 22px;
+}
+
+.cta-row .hero-push {
+  min-width: 196px;
+}
+
+.cta-row .btn-ghost {
+  min-width: 156px;
 }
 
 .hud {
   position: absolute;
   right: var(--gutter);
-  bottom: clamp(40px, 9vh, 96px);
+  bottom: clamp(78px, 11vh, 110px); /* above the simulation readout */
   z-index: 2;
   display: grid;
   justify-items: end;
-  gap: 10px;
-  font: 500 11px/1.3 var(--mono);
+  gap: 6px;
+  font: 500 11px/1 var(--mono);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 /* .landing .state, not .state: `.landing p` resets padding and outranks a lone class, which left
-   the pill with its words touching its border. */
+   the pill with its words touching its border. Matches .hero-live's size and quiet surface so it
+   does not compete with the MuJoCo readout below it. */
 .landing .state {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 8px 14px 8px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-1);
-  background: rgb(8 9 11 / 0.62);
-  backdrop-filter: blur(10px);
-  color: var(--fg);
+  background: rgb(8 9 11 / 0.55);
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .state i {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   background: #6fcf8a; /* green: standing, all good */
 }
@@ -553,8 +689,9 @@ html.is-landing.lenis body {
 }
 
 .landing .tally {
-  padding-right: 14px;
-  color: var(--fg-2);
+  padding-right: 4px;
+  font-size: 10px;
+  color: var(--dim);
 }
 
 .scroll-cue {
@@ -656,13 +793,11 @@ html.is-landing.lenis body {
 
 .capture-caption {
   left: var(--gutter);
-  top: clamp(96px, 16vh, 160px);
-  width: min(40vw, 560px);
+  top: var(--card-top);
+  width: var(--card-width);
 }
 
-.capture-caption p {
-  margin-top: 16px !important;
-}
+
 
 /* Gym: three stops of the training, one screen of scroll each */
 
@@ -674,28 +809,108 @@ html.is-landing.lenis body {
    backdrop blur: one this size filters the whole film under it again every frame. */
 /* A lime edge on top marks a live readout, as on an instrument. */
 .panel {
-  padding: var(--s-5) var(--s-6);
+  padding: 20px 24px;
   border: 1px solid var(--line);
   border-top: 2px solid var(--signal);
   border-radius: var(--r-2);
-  background: rgb(8 9 11 / 0.76);
+  background: rgb(8 9 11 / 0.78);
   box-shadow: 0 30px 80px -30px rgb(0 0 0 / 0.8);
 }
 
+/* One title size for every chapter card (Capture, Gym, Policy). */
 .panel h2 {
-  font-size: clamp(24px, 2.3vw, 36px);
+  font-size: clamp(22px, 2.2vw, 32px);
+}
+
+/* Every card's first line under the title: same size, same gap. */
+.panel h2 + p,
+.capture-caption p,
+.policy-lede {
+  margin-top: 10px !important;
+  font-size: 14px;
+  line-height: 1.45;
 }
 
 .gym-caption {
   left: var(--gutter);
-  top: 84px; /* under the top bar: the steps meter makes the card too tall to center */
-  width: min(36vw, 500px);
+  top: var(--card-top); /* as Capture's: the steps meter makes the card too tall to center */
+  width: var(--card-width);
 }
 
+.gym-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 12px;
+}
 
 /* Space pushes here too (home.js pushGym): the button says so, as the hero's does. */
 .gym-push {
-  margin-top: var(--s-3);
+  flex: none;
+  min-width: 156px;
+}
+
+.gym-force {
+  flex: 0 1 196px;
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.gym-force-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font: 500 10px/1 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+.gym-force-head b {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--signal);
+}
+
+.gym-force-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 12px;
+}
+
+.gym-force-zone {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 4px;
+  transform: translateY(-50%);
+  border-radius: 2px;
+  background: rgb(200 255 46 / 0.35);
+  pointer-events: none;
+  transition: width 0.35s ease;
+}
+
+.gym-force-slider {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  margin: 0;
+  accent-color: var(--signal);
+  cursor: pointer;
+}
+
+.gym-force-cap {
+  font: 500 9.5px/1.15 var(--mono);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #6fcf8a;
+  white-space: nowrap;
+}
+
+.gym-force-cap[data-over='true'] {
+  color: #f59e0b;
 }
 
 .gym-hint {
@@ -714,13 +929,13 @@ html.is-landing.lenis body {
   color: var(--fg);
 }
 
-/* The steps: a big count of the stage on screen, what a step is, the real 0 to 40 M scale with
-   the three checkpoints on it, and the three as buttons (home.js showGymStage). */
+/* The steps: a big count of the stage on screen, what a step is, the 0 to 1 B scale with
+   the four checkpoints on it, and the four as buttons (home.js showGymStage). */
 .steps-meter {
   display: grid;
-  gap: 14px;
-  margin-top: 18px;
-  padding-top: 18px;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
   border-top: 1px solid var(--line);
 }
 
@@ -732,7 +947,7 @@ html.is-landing.lenis body {
 }
 
 .steps-now b {
-  font: 500 clamp(44px, 4.4vw, 68px)/0.9 var(--display);
+  font: 500 clamp(38px, 3.8vw, 56px)/0.9 var(--display);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
   color: var(--signal);
@@ -801,11 +1016,7 @@ html.is-landing.lenis body {
 .axis-stops {
   display: grid;
   grid-template-columns: repeat(4, 1fr); /* one per GYM_STAGES entry (home.js) */
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  background: rgb(241 243 238 / 0.03);
+  gap: 4px; /* no box around the stops: the card is the only box (one card, not one inside another) */
 }
 
 .axis-stop {
@@ -847,13 +1058,10 @@ html.is-landing.lenis body {
   white-space: nowrap;
 }
 
+/* The stage's sentence and its numbers: plain lines inside the card, no box of their own. */
 .stage-detail {
   display: grid;
   gap: 6px;
-  padding: 12px 14px;
-  border-left: 3px solid var(--signal);
-  border-radius: 0 8px 8px 0;
-  background: rgb(241 243 238 / 0.05);
 }
 
 
@@ -865,17 +1073,19 @@ html.is-landing.lenis body {
 .stage-numbers {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 4px 6px;
 }
 
-.stage-numbers span {
-  padding: 6px 10px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-1);
-  font: 500 11px/1 var(--mono);
+.stage-numbers > span {
+  font: 500 11px/1.4 var(--mono);
   text-transform: uppercase;
   color: var(--fg-2);
+}
+
+/* Child spans only: each number holds one span per language (i18n T), which are siblings too. */
+.stage-numbers > span + span::before {
+  content: '·';
+  margin-right: 6px;
 }
 
 .stage-numbers b {
@@ -906,57 +1116,71 @@ html.is-landing.lenis body {
 
 .policy-caption {
   right: var(--gutter);
-  top: 50%;
-  width: min(36vw, 500px);
-  transform: translateY(-50%);
+  top: var(--card-top); /* as every chapter's card */
+  width: var(--card-width);
 }
 
-.policy-lede {
-  margin-top: var(--s-3) !important;
-  font-size: 15px;
-}
+
 
 .specs {
   display: grid;
-  margin-top: 22px !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px !important;
 }
 
 .specs li {
   display: grid;
-  grid-template-columns: minmax(130px, auto) 1fr;
-  align-items: baseline;
-  gap: 20px;
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: rgb(241 243 238 / 0.03);
 }
 
 .specs b {
-  font: 500 clamp(30px, 3vw, 46px)/1 var(--display);
+  font: 500 clamp(22px, 2.2vw, 30px)/1 var(--display);
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
+  color: var(--signal);
 }
 
 .specs span {
-  font-size: 15px;
-  color: var(--fg);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--fg-2);
 }
 
 .policy-note {
-  margin-top: 18px !important;
-  padding-top: 16px;
+  margin-top: 12px !important;
+  padding-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
-/* The way into what the policy delivers (#/entrega): stays on phones, where the note above hides. */
+/* The way into what the policy delivers (#/delivery): stays on phones, where the note above hides. */
 .policy-data {
-  margin-top: 16px;
+  min-width: 224px;
+  margin-top: 12px;
 }
 
-/* Closing: the page closes over the film */
+/* Closing: the manifesto and action cards lock on screen while the footer scrolls into view */
 
 .closing {
-  padding: 30vh var(--gutter) 0;
+  position: relative;
+  min-height: 192svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14vh var(--gutter) 0;
+}
+
+.closing-sticky {
+  position: sticky;
+  top: var(--card-top);
+  z-index: 1;
+  padding-bottom: 4vh;
 }
 
 .closing-inner {
@@ -964,11 +1188,11 @@ html.is-landing.lenis body {
   margin: 0 auto;
 }
 
-
+/* Two lines, one sentence each (strings.js): sized so the longer one fits the 1200 px column. */
 .manifesto {
-  font-size: clamp(44px, 7vw, 116px) !important;
-  line-height: 0.92 !important;
-  max-width: 12em;
+  font-size: clamp(28px, 4.2vw, 56px) !important;
+  line-height: 1.02 !important;
+  white-space: nowrap;
 }
 
 .manifesto .w {
@@ -982,68 +1206,45 @@ html.is-landing.lenis body {
 }
 
 .closing-text {
-  max-width: 36em;
-  margin-top: 36px !important;
+  max-width: 48em;
+  margin-top: 24px !important;
   font-size: clamp(17px, 1.4vw, 21px);
   color: var(--fg-2);
 }
 
-/* Where we are: a progress line with three milestones. Done is filled, "now" pulses, next is
-   hollow; the line fills up to "now" as it scrolls in (home.js). Vertical on phones. */
+/* Where we are: three static status cards (Today, Training, What's next). */
 .progress-track {
-  --dot: 14px;
+  --dot: 10px;
   position: relative;
-  margin-top: 56px;
+  margin-top: 48px;
 }
 
-.track-line {
-  position: absolute;
-  left: calc(var(--dot) / 2);
-  right: calc(var(--dot) / 2);
-  top: calc(var(--dot) / 2 - 1px);
-  height: 2px;
-  background: var(--line-dark);
-}
-
-.track-fill {
-  position: absolute;
-  inset: 0;
-  width: calc(50% + var(--dot) / 2); /* up to the middle milestone, "Entrenando" */
-  background: var(--signal);
-  transform-origin: left center;
-}
-
-.milestones {
+.landing .milestones {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 28px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.milestones li {
+.landing .milestones li {
   position: relative;
   display: grid;
   align-content: start;
+  justify-items: start;
+  text-align: left;
   gap: 10px;
-}
-
-/* The middle milestone sits centered on the line, the last one at its end. */
-.milestones li:nth-child(2) {
-  justify-items: center;
-  text-align: center;
-}
-
-.milestones li:nth-child(3) {
-  justify-items: end;
-  text-align: right;
+  padding: 20px;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--r-2);
+  background: rgb(241 243 238 / 0.03);
 }
 
 .dot {
   width: var(--dot);
   height: var(--dot);
-  margin-bottom: 14px;
+  margin-bottom: 4px;
   border: 2px solid var(--fg-2);
   background: var(--scene);
 }
@@ -1078,9 +1279,9 @@ html.is-landing.lenis body {
   color: var(--signal);
 }
 
-.milestones b {
-  max-width: 22ch;
-  font: 500 clamp(18px, 1.6vw, 24px)/1.15 var(--display);
+.landing .milestones b {
+  max-width: 24ch;
+  font: 500 clamp(18px, 1.5vw, 22px)/1.2 var(--display);
   letter-spacing: -0.02em;
 }
 
@@ -1094,15 +1295,17 @@ html.is-landing.lenis body {
   color: var(--dim);
 }
 
-
-
-
-
 .tries {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
   margin-top: 12px;
+}
+
+@media (max-width: 1080px) {
+  .tries {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* The ways to try it (and see what it delivers): real cards, each with its own icon, a short detail and a button, so
@@ -1118,14 +1321,15 @@ html.is-landing.lenis body {
   background: rgb(241 243 238 / 0.04);
   color: var(--fg);
   text-decoration: none;
-  transition: transform 0.25s ease, border-color 0.25s, background 0.25s;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 
 .try:hover,
 .try:focus-visible {
-  transform: translateY(-4px);
   border-color: var(--signal);
-  background: rgb(200 255 46 / 0.08);
+  background-color: rgb(200 255 46 / 0.08);
 }
 
 .try-icon {
@@ -1180,12 +1384,17 @@ html.is-landing.lenis body {
 
 
 .footer {
+  position: relative;
+  z-index: 2;
   display: grid;
   gap: 56px;
+  width: 100%;
   max-width: 1200px;
-  margin: clamp(96px, 14vw, 180px) auto 0;
-  padding: 32px 0 36px;
-  border-top: 1px solid var(--line);
+  margin: clamp(160px, 22vh, 260px) auto 0;
+  padding: 28px 28px 40px;
+  border-top: 0;
+  border-radius: var(--r-2) var(--r-2) 0 0;
+  background: linear-gradient(180deg, rgb(8 9 11 / 0.92), rgb(8 9 11 / 0.98));
 }
 
 .footer > p {
@@ -1200,6 +1409,8 @@ html.is-landing.lenis body {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line-dark);
 }
 
 .wordmark.big {
@@ -1233,7 +1444,7 @@ html.is-landing.lenis body {
     display: none;
   }
 
-  .topbar .btn {
+  .topbar .lang-switch {
     margin-left: auto;
   }
 }
@@ -1274,7 +1485,9 @@ html.is-landing.lenis body {
   }
 
   .topbar .btn-small {
+    min-width: 88px;
     min-height: 34px;
+    height: 34px;
     padding: 0 var(--s-3);
   }
 
@@ -1310,10 +1523,12 @@ html.is-landing.lenis body {
   }
 
   .hero-caption h1 {
+    white-space: normal;
     font-size: 42px;
   }
 
   .hero-lede {
+    min-height: 0;
     margin-top: var(--s-3) !important;
     font-size: 15px;
   }
@@ -1400,7 +1615,7 @@ html.is-landing.lenis body {
   }
 
   .gym-lede {
-    margin: 0 !important;
+    margin: var(--s-2) 0 0 !important;
     font-size: 13px;
     color: var(--fg-2) !important;
   }
@@ -1499,6 +1714,7 @@ html.is-landing.lenis body {
   }
 
   .manifesto {
+    white-space: normal;
     font-size: 40px !important;
   }
 
@@ -1572,49 +1788,22 @@ html.is-landing.lenis body {
     content: '';
   }
 
-  /* Where we are: three short lines down a vertical track. */
+  /* Where we are: three stacked status cards on phones. */
   .progress-track {
     margin-top: var(--s-7);
   }
 
-  .track-line {
-    left: calc(var(--dot) / 2 - 1px);
-    right: auto;
-    top: calc(var(--dot) / 2);
-    bottom: 0;
-    width: 2px;
-    height: auto;
-  }
-
-  .track-fill {
-    width: auto;
-    height: 55%;
-    transform-origin: center top;
-  }
-
-  .milestones {
+  .landing .milestones {
     grid-template-columns: 1fr;
-    gap: var(--s-5);
+    gap: var(--s-3);
   }
 
-  .milestones li,
-  .milestones li:nth-child(2),
-  .milestones li:nth-child(3) {
-    justify-items: start;
-    gap: var(--s-1);
-    padding-left: calc(var(--dot) + var(--s-4));
-    text-align: left;
+  .landing .milestones li {
+    padding: var(--s-4);
   }
 
-  .milestones b {
+  .landing .milestones b {
     font-size: 17px;
-  }
-
-  .dot {
-    position: absolute;
-    left: 0;
-    top: 0;
-    margin: 0;
   }
 
   .footer {

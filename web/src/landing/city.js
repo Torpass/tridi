@@ -32,14 +32,13 @@ const SHOPS_Z = 6.2; // the robot's row of shops
 const CURB_Z = -2.2; // its curb: the walk drifts up to 1 m toward the road (z = -1.0)
 const FAR_CURB_Z = -9.4; // 7.2 m of road: a parking lane on each side and one lane, one way, between
 const FAR_SHOPS_Z = -12.4; // 3 m of far sidewalk, then the far row
-const ROAD_DROP_M = 0.14; // the road lies a curb below; the sidewalks are the physics floor (y = 0)
+const ROAD_DROP_M = 0; // flush with the physics floor (y = 0) so the robot never floats over the road
 const CURB_W = 0.22;
-const STREET_M = 140; // floor length along x; the end buildings close the street well before
-// The two rows of shops, along x: the hero looks down the street toward -x, and past 40 m the dusk
-// haze has already turned the buildings into silhouettes.
-const ROW_X = [-44, 44];
-const END_X = 48; // a row of buildings across each end of the street, so no shot looks into nothing
-const TOWERS_N = SMALL_SCREEN ? 0 : 6; // a skyline over the near rows, where the cameras look
+const STREET_M = 76; // compact street length along x so cameras never roam into hollow shells
+// The two rows of shops, along x: compact corridor around the robot's stage.
+const ROW_X = [-28, 28];
+const END_X = 30; // a row of buildings across each end of the street, closing the block tightly
+const TOWERS_N = SMALL_SCREEN ? 0 : 4; // a skyline over the near rows, where the cameras look
 // Where the robot walks (x 0 to 7.5), falls (1.5 m around the origin) and where the cameras fly,
 // shots and the moves between them: nothing above the floor stands here, so no prop hides the
 // robot or cuts through the lens. Signs and awnings on the walls are high enough to pass over.

@@ -1,16 +1,39 @@
 <!doctype html>
-<html lang="es">
+<html lang="en" data-lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#08090b" />
-    <meta name="description" content="Tridi convierte video de personas en experiencia para robots humanoides: movimiento 3D y políticas entrenadas en física real." />
+    <meta name="description" content="Film a motion or bring your robot hardware. Tridi trains humanoids and any physical robot in MuJoCo physics until the ONNX policy transfers to the real world." />
+    <link rel="canonical" href="https://trytridi.com/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://trytridi.com/" />
+    <meta property="og:site_name" content="Tridi" />
+    <meta property="og:title" content="Tridi — Physical AI for humanoids and real-world robots" />
+    <meta property="og:description" content="Film a motion or bring your robot hardware. Tridi trains humanoids and any physical robot in MuJoCo physics until the ONNX policy transfers to the real world." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Tridi — Physical AI for humanoids and real-world robots" />
+    <meta name="twitter:description" content="Film a motion or bring your robot hardware. Tridi trains humanoids and any physical robot in MuJoCo physics until the ONNX policy transfers to the real world." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Cpath%20fill=%27%23c8ff2e%27%20d=%27M16%202l12.1%207L16%2016%203.9%209z%27/%3E%3Cpath%20fill=%27%239fd61c%27%20d=%27M3.9%209%2016%2016v14L3.9%2023z%27/%3E%3Cpath%20fill=%27%236b8f0e%27%20d=%27M28.1%209%2016%2016v14l12.1-7z%27/%3E%3Cpath%20fill=%27none%27%20stroke=%27%2308090b%27%20stroke-width=%271.8%27%20d=%27M16%2016%206.3%2010.4M16%2016l9.7-5.6M16%2016v11.4%27/%3E%3Ccircle%20fill=%27%2308090b%27%20cx=%2716%27%20cy=%279.4%27%20r=%272.5%27/%3E%3Crect%20fill=%27%2308090b%27%20x=%2713.7%27%20y=%2713.7%27%20width=%274.6%27%20height=%274.6%27/%3E%3C/svg%3E" />
-    <title>Tridi — de video a robots que aprenden a moverse</title>
+    <script>
+      // Language before the first paint, so the page never flashes the wrong one (src/i18n.js):
+      // a link's ?lang= (this visit only), the saved choice, else English. The browser's language is not
+      // asked: the page is in English, and Spanish is there for whoever picks it.
+      (function () {
+        var langs = ['en', 'es'];
+        var saved = null;
+        try { saved = localStorage.getItem('tridi-lang'); } catch (e) {}
+        var asked = new URLSearchParams(location.search).get('lang');
+        var lang = [asked, saved, 'en'].find(function (l) { return langs.indexOf(l) >= 0; });
+        document.documentElement.dataset.lang = lang;
+        document.documentElement.lang = lang;
+      })();
+    </script>
+    <title>Tridi — Physical AI for humanoids and real-world robots</title>
   </head>
   <body>
     <div id="app" tabindex="-1"></div>
-    <p id="app-loading" role="status">Cargando…</p>
+    <p id="app-loading" role="status"><span class="t" lang="es">Cargando…</span><span class="t" lang="en">Loading…</span></p>
     <script type="module" src="./src/main.js"></script>
   </body>
 </html>

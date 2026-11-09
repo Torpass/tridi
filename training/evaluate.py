@@ -22,7 +22,7 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .env import ACTION_SCALE, EPISODE_STEPS, G1Env
+from .env import ACTION_SCALE, EPISODE_STEPS, G1Env, stand_obs_dim, stand_senses
 from .ppo import ActorCritic
 
 PUSH_N = 250.0  # physics/src/sim.js
@@ -45,17 +45,20 @@ class Policy:
 
     def __init__(self, path: Path | None):
         self.model = self.session = None
+        self.sense_velocity = False
         if path is None:
             return
         if path.suffix == ".onnx":
             import onnxruntime as ort
 
             self.session = ort.InferenceSession(str(path))
-            self.input = self.session.get_inputs()[0].name
+            inp = self.session.get_inputs()[0]
+            self.input = inp.name
+            self.sense_velocity = inp.shape[1] == stand_obs_dim(sense_velocity=True)
         else:
-            self.model = ActorCritic()
-            self.model.load_state_dict(torch.load(path)["model"])
+            self.model = ActorCritic.from_state(torch.load(path)["model"])
             self.model.eval()
+            self.sense_velocity = bool(stand_senses(self.model))
 
     def act(self, env: G1Env, obs: np.ndarray) -> np.ndarray:
         if self.session is not None:
@@ -69,7 +72,7 @@ class Policy:
 
 
 def run(policy: Policy, seed: int, pushes: bool) -> dict[str, float]:
-    env = G1Env(seed=seed, push=False)
+    env = G1Env(seed=seed, push=False, sense_velocity=policy.sense_velocity)
     obs = env.reset()
     feet = [env.model.body(name).id for name in FEET]
     floor = env.data.xpos[feet, 2].copy()  # where the soles rest when standing

@@ -5,13 +5,14 @@
 // observation and get the same targets. If the observation differed, the robot would fall in the
 // browser even though everything "runs".
 // Run: npm run check
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as ort from '../src/onnx-lite.js'; // the page's runtime (check-onnx compares it with onnxruntime)
 import { createPolicy } from '../src/policy.js';
 import { loadG1Node } from './node-model.mjs';
 
 const POLICIES = new URL('../../training/policies/', import.meta.url);
 const MOTIONS = new URL('../motions/', import.meta.url);
+const REFERENCES = new URL('../../training/references/', import.meta.url);
 const POLICY = 'g1-walk';
 // The network reads float32, which keeps ~7 digits: inputs equal to 1e-4 are the same input. The
 // fixture's states are rounded to 1e-9, so anything above that is a difference in how they are built.
@@ -25,7 +26,8 @@ const MAX_ROOT_ERROR_M = 0.6;
 const read = (url) => JSON.parse(readFileSync(url));
 const meta = read(new URL(`${POLICY}.json`, POLICIES));
 const fixture = read(new URL(`${POLICY}.fixture.json`, POLICIES));
-const motion = read(new URL(`${meta.motion}.json`, MOTIONS));
+const inMotions = new URL(`${meta.motion}.json`, MOTIONS);
+const motion = read(existsSync(inMotions) ? inMotions : new URL(`${meta.motion}.json`, REFERENCES));
 
 const { sim } = await loadG1Node();
 sim.load('scene_mjx.xml', 'home'); // the scene the policy was trained on
@@ -57,18 +59,29 @@ for (const s of fixture.samples) {
 expect(worstObs < OBS_TOLERANCE, `same observation as Python in ${fixture.samples.length} states (worst ${worstObs.toExponential(1)}, at input ${worstAt})`);
 expect(worstCtrl < CTRL_TOLERANCE, `same motor targets as Python (worst ${worstCtrl.toExponential(1)} rad)`);
 
-// The policy driving the robot from the clip's first pose, as the page does. Reported, not asserted:
-// the walk does not hold yet (training goes on), and this number is the one to watch.
-sim.reset();
-let followed = 0;
-for (let t = 0; t < policy.duration; t += 0.02) {
-  await sim.advance(0.02);
-  const pelvis = sim.bodyPosition('pelvis');
-  const reference = motion.qpos[Math.min(Math.round(policy.time(sim) * motion.fps), motion.qpos.length - 1)];
-  if (pelvis[2] < FALL_HEIGHT || Math.hypot(pelvis[0] - reference[0], pelvis[1] - reference[1]) > MAX_ROOT_ERROR_M) break;
-  followed = policy.time(sim);
+// The policy driving the robot from the clip's first pose, as the page does.
+for (const id of ['g1-walk', 'g1-run', 'g1-jacks', 'g1-saludar', 'g1-dedos', 'g1-bailar', 'g1-frente', 'g1-sentarse', 'h1-walk']) {
+  if (!existsSync(new URL(`${id}.onnx`, POLICIES))) continue;
+  const m = read(new URL(`${id}.json`, POLICIES));
+  const sceneFile = m.robot === 'unitree_h1' ? 'unitree_h1/scene.xml' : 'scene_mjx.xml';
+  if (sim.loadedScene !== sceneFile) sim.load(sceneFile, 'home');
+  const inM = new URL(`${m.motion}.json`, MOTIONS);
+  const mot = read(existsSync(inM) ? inM : new URL(`${m.motion}.json`, REFERENCES));
+  const p = await createPolicy(ort, sim, new Uint8Array(readFileSync(new URL(`${id}.onnx`, POLICIES))), m, { motion: mot });
+  sim.policy = p;
+  sim.reset();
+  let followed = 0;
+  for (let t = 0; t < p.duration; t += 0.02) {
+    await sim.advance(0.02);
+    const pelvis = sim.bodyPosition('pelvis');
+    const reference = mot.qpos[Math.min(Math.round(p.time(sim) * mot.fps), mot.qpos.length - 1)];
+    const fallHeight = Math.min(FALL_HEIGHT, reference[2] - 0.12);
+    if (pelvis[2] < fallHeight || Math.hypot(pelvis[0] - reference[0], pelvis[1] - reference[1]) > MAX_ROOT_ERROR_M) break;
+    followed = Math.max(followed, p.time(sim));
+  }
+  expect(followed >= p.duration - 0.1, `${id} follows the clip ${followed.toFixed(1)} s of ${p.duration.toFixed(1)} from its first pose`);
+  p.dispose();
 }
-console.log(`  info follows the clip ${followed.toFixed(1)} s of ${policy.duration.toFixed(1)} from its first pose (Python's evaluate_walk.py measures the same)`);
 
 policy.dispose();
 sim.delete();

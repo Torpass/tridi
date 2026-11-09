@@ -19,7 +19,7 @@ import onnxruntime as ort
 import torch
 from torch import nn
 
-from .env import ACTION_SCALE, MJCF, NU, OBS_DIM, G1Env
+from .env import ACTION_SCALE, MJCF, NU, OBS_DIM, G1Env, stand_senses
 from .imitate import LOOKAHEAD_S
 from .ppo import ActorCritic, obs_size
 
@@ -35,6 +35,7 @@ class Deployed(nn.Module):
         super().__init__()
         self.model = model
         self.walk = walk
+        self.nu = int(env.nu)
         self.register_buffer("default", torch.as_tensor(env.default, dtype=torch.float32))
         self.register_buffer("low", torch.as_tensor(env.ctrl_low, dtype=torch.float32))
         self.register_buffer("high", torch.as_tensor(env.ctrl_high, dtype=torch.float32))
@@ -42,8 +43,10 @@ class Deployed(nn.Module):
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         action = self.model.actor(self.model.norm(obs))  # the mean: no exploration noise in the demo
         # Standing corrects the standing pose; walking corrects the reference pose it receives in
-        # obs[93:122] (as an offset from the standing pose, see imitate.MimicEnv.observe).
-        base = self.default + obs[:, 93:122] if self.walk else self.default
+        # obs[6 + 3*nu : 6 + 4*nu] (93:122 on the 29-joint G1, 63:82 on the 19-joint H1; see
+        # imitate.MimicEnv.observe).
+        s = 6 + 3 * self.nu
+        base = self.default + obs[:, s:s + self.nu] if self.walk else self.default
         return torch.minimum(torch.maximum(base + ACTION_SCALE * action, self.low), self.high)
 
 
@@ -53,22 +56,22 @@ def export(checkpoint: Path, policy_id: str, out: Path, task: str | None = None,
     state = torch.load(checkpoint)
     task = state.get("task") or task or "stand"
     walk = task == "mimic"
-    model = ActorCritic(obs_size(task))
-    model.load_state_dict(state["model"])
+    model = ActorCritic.from_state(state["model"])
     model.eval()
+    obs_dim = model.norm.mean.shape[0]
     if walk:
-        from .imitate import DEFAULT_MOTION, MimicEnv
+        from .imitate import DEFAULT_MOTION, MimicEnv, senses
 
-        motion = state.get("motion") or motion or DEFAULT_MOTION
-        env = MimicEnv(seed=0, clips=(motion,))
+        motion = motion or state.get("motion") or DEFAULT_MOTION
+        env = MimicEnv(seed=0, clips=(motion,), **senses(model))
     else:
-        env = G1Env(seed=0, push=False)
+        env = G1Env(seed=0, push=False, **stand_senses(model))
     deployed = Deployed(model, env, walk).eval()
 
     out.mkdir(parents=True, exist_ok=True)
     onnx_path = out / f"{policy_id}.onnx"
     torch.onnx.export(
-        deployed, torch.zeros(1, obs_size(task)), str(onnx_path), input_names=["obs"], output_names=["ctrl"],
+        deployed, torch.zeros(1, obs_dim), str(onnx_path), input_names=["obs"], output_names=["ctrl"],
         dynamic_axes={"obs": {0: "batch"}, "ctrl": {0: "batch"}}, opset_version=17, dynamo=False,
     )
 
@@ -98,16 +101,18 @@ def export(checkpoint: Path, policy_id: str, out: Path, task: str | None = None,
 
     meta = {
         "id": policy_id,
-        "robot": "unitree_g1",
-        "mjcf": MJCF,
-        "obs_dim": obs_size(task),
-        "nu": NU,
+        "robot": env.mjcf.split("/")[0],
+        "robot_package": env.robot_id,
+        "mjcf": env.mjcf,
+        "obs_dim": obs_dim,
+        "nu": env.nu,
         "task": task,
         # Standing learns from pushes, not from people; imitation from the clip it imitates.
         "trained_on": [m.id for m in env.motions] if walk else [],
         # Imitation: the clip it follows, and how far ahead the observation shows it
         # (imitate.MimicEnv.observe).
         **({"motion": env.motions[0].id, "lookahead_s": list(LOOKAHEAD_S)} if walk else {}),
+        **({"sense_velocity": True} if getattr(env, "sense_velocity", False) else {}),
         "worlds": state.get("worlds") or TRAINED_WORLDS,
         **followed,
         "steps": int(state["step"]),

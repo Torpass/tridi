@@ -7,6 +7,7 @@ worker processes, each stepping its group with numpy arrays sent through a pipe.
 from __future__ import annotations
 
 import multiprocessing as mp
+import signal
 
 import numpy as np
 
@@ -15,7 +16,8 @@ from .env import PUSH_EVERY_S, PUSH_N, G1Env, Stance
 
 def make_env(task: str, seed: int, push: bool, push_n: tuple[float, float], motion: str | None = None,
              push_every: tuple[float, float] = PUSH_EVERY_S, stance: Stance | None = None,
-             worlds: tuple[str, ...] = (), wind_max: float | None = None) -> G1Env:
+             worlds: tuple[str, ...] = (), wind_max: float | None = None, follow: bool = False,
+             recover: bool | float = False, sense_velocity: bool = False) -> G1Env:
     if worlds:
         # Robot `seed` lives in world seed mod n: seeds are consecutive, so each world gets an
         # equal share of the robots, and every reset draws new values inside its ranges.
@@ -25,18 +27,28 @@ def make_env(task: str, seed: int, push: bool, push_n: tuple[float, float], moti
         world = load_world(worlds[seed % len(worlds)])
         if task == "mimic":
             return MimicInWorld(world, seed, motion or DEFAULT_MOTION, push_n=push_n, push_every=push_every,
-                                wind_max=wind_max)
-        return StandInWorld(world, seed, push_n=push_n, push_every=push_every, stance=stance, wind_max=wind_max)
+                                wind_max=wind_max, push=push and push_n[1] > 0, follow=follow,
+                                recover=recover, sense_velocity=sense_velocity)
+        return StandInWorld(world, seed, push_n=push_n, push_every=push_every, stance=stance, wind_max=wind_max,
+                            sense_velocity=sense_velocity)
     if task == "mimic":
         from .imitate import DEFAULT_MOTION, MimicEnv
 
-        return MimicEnv(seed=seed, clips=(motion or DEFAULT_MOTION,))
-    return G1Env(seed=seed, push=push, push_n=push_n, push_every=push_every, stance=stance)
+        # push: the robust mimic training (ppo.py --robust): a nudged start and random pushes.
+        return MimicEnv(seed=seed, clips=(motion or DEFAULT_MOTION,), push=push and push_n[1] > 0, push_n=push_n,
+                        push_every=push_every, nudge=push, follow=follow, recover=recover,
+                        sense_velocity=sense_velocity)
+    return G1Env(seed=seed, push=push, push_n=push_n, push_every=push_every, stance=stance,
+                 sense_velocity=sense_velocity)
 
 
 def _worker(conn, seeds: list[int], push: bool, push_n: tuple[float, float], task: str, motion: str | None,
-            push_every: tuple[float, float], stance: Stance | None, worlds: tuple[str, ...], wind_max: float | None) -> None:
-    envs = [make_env(task, s, push, push_n, motion, push_every, stance, worlds, wind_max) for s in seeds]
+            push_every: tuple[float, float], stance: Stance | None, worlds: tuple[str, ...], wind_max: float | None,
+            follow: bool = False, recover: bool | float = False, sense_velocity: bool = False) -> None:
+    # Ctrl-C reaches every process of the terminal: the workers leave it to the main one, which saves
+    # latest.pt and closes them, instead of each dying with a traceback mid-step.
+    signal.signal(signal.SIGINT, signal.SIG_IGN)
+    envs = [make_env(task, s, push, push_n, motion, push_every, stance, worlds, wind_max, follow, recover, sense_velocity) for s in seeds]
     while True:
         cmd, payload = conn.recv()
         if cmd == "reset":
@@ -59,14 +71,15 @@ class VecEnv:
     def __init__(self, num_envs: int, workers: int, seed: int = 0, push: bool = True,
                  push_n: tuple[float, float] = PUSH_N, task: str = "stand", motion: str | None = None,
                  push_every: tuple[float, float] = PUSH_EVERY_S, stance: Stance | None = None,
-                 worlds: tuple[str, ...] = (), wind_max: float | None = None):
+                 worlds: tuple[str, ...] = (), wind_max: float | None = None, follow: bool = False, recover: bool | float = False,
+                 sense_velocity: bool = False):
         self.num_envs = num_envs
         groups = np.array_split(np.arange(num_envs) + seed * 10_000, workers)
         ctx = mp.get_context("spawn")  # fork is unsafe on macOS once torch is loaded
         self.conns, self.procs = [], []
         for g in groups:
             parent, child = ctx.Pipe()
-            p = ctx.Process(target=_worker, args=(child, g.tolist(), push, push_n, task, motion, push_every, stance, worlds, wind_max), daemon=True)
+            p = ctx.Process(target=_worker, args=(child, g.tolist(), push, push_n, task, motion, push_every, stance, worlds, wind_max, follow, recover, sense_velocity), daemon=True)
             p.start()
             self.conns.append(parent)
             self.procs.append(p)

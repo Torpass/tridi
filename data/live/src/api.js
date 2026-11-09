@@ -98,7 +98,7 @@ export async function findApiUrl({ fallback = null } = {}) {
   }
   if (stored && (await checkApi(stored))) return stored;
   const published = await publishedApiUrl(SERVER_GIST, { dead: stored });
-  if (published) {
+  if (published && (await checkApi(published))) {
     remember(published);
     return published;
   }

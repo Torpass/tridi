@@ -1,10 +1,10 @@
 // The phone as the live camera (docs/contrato.md, "El teléfono como cámara"). Two halves that only
 // meet at the server (data/relay.py), which passes frames from one to the other in memory:
 //
-// - the phone (web #/camara/<session>): createLiveCapture with the back camera, and
+// - the phone (web #/camera/<session>): createLiveCapture with the back camera, and
 //   createPhoneSender posts what onPose gives, in batches, with a small JPEG of the camera image
 //   (createImageGrabber) in some of the frames;
-// - the Mac (web #/en-vivo): createPhoneCapture long-polls those frames and offers the same
+// - the Mac (web #/live): createPhoneCapture long-polls those frames and offers the same
 //   interface as createLiveCapture ({ startRecording, stopRecording, isRecording, fps, stop }),
 //   so the screen, the robot's mimic and buildPoseClip do not know which camera it was; onImage
 //   gives the camera image of the frame being played, to show under the skeleton.
@@ -15,9 +15,10 @@
 import { buildPoseClip, cameraTranslation, isSeen } from './poseclip.js';
 import { UploadError } from './upload.js';
 
-// The phone posts every 100 ms (3 frames at 30 fps, ~5 KB). One request per frame would be 30 a
-// second through the tunnel; 500 ms batches would add half a second of delay.
-export const PHONE_BATCH_MS = 100;
+// The phone posts every 50 ms (1-2 frames at 30 fps, ~2.5 KB), cutting relay latency in half
+// compared to 100 ms batches while keeping HTTP fallback under 20 requests/s; when WebSocket is
+// open in the browser, frames stream over the persistent socket without HTTP request overhead.
+export const PHONE_BATCH_MS = 50;
 
 // A batch that fails to send waits for the next tick with the new frames. Up to 30 frames (1 s)
 // are kept that way: later than that the robot would copy the past, and 30 frames fit the
@@ -54,7 +55,7 @@ export const PHONE_SILENCE_S = 5;
 // with the least delay that still keeps every frame from arriving late. 2 s forgets a one-off
 // hiccup quickly; 20 ms is about one frame of timer jitter.
 const PLAYOUT_WINDOW_MS = 2000;
-const PLAYOUT_MARGIN_MS = 20;
+const PLAYOUT_MARGIN_MS = 12;
 
 // Numbers on the wire: world to 1 mm (MediaPipe is good to centimeters), image to 1/10000 of the
 // frame (0.13 px at 1280) and visibility to 1 %. Any finer only makes the batch heavier.
@@ -99,7 +100,7 @@ export async function closePhoneSession(baseUrl, sessionId) {
 export function phonePageUrl(webUrl, apiUrl, sessionId) {
   const page = new URL(webUrl);
   page.search = `?api=${encodeURIComponent(base(apiUrl))}`;
-  page.hash = `#/camara/${sessionId}`;
+  page.hash = `#/camera/${sessionId}`;
   return page.toString();
 }
 
@@ -112,6 +113,12 @@ export function toFrame(pose, t = performance.now() / 1000, jpeg = null) {
         world: pose.world.map((p) => [mm(p.x), mm(p.y), mm(p.z)]),
         image: pose.landmarks.map((p) => [tenThousandth(p.x), tenThousandth(p.y), percent(p.visibility ?? 0)]),
       };
+  if (pose?.hands && (pose.hands.left || pose.hands.right)) {
+    frame.hands = {
+      left: pose.hands.left ? pose.hands.left.map((p) => [mm(p.x), mm(p.y), mm(p.z)]) : null,
+      right: pose.hands.right ? pose.hands.right.map((p) => [mm(p.x), mm(p.y), mm(p.z)]) : null,
+    };
+  }
   if (jpeg) frame.jpeg = jpeg;
   return frame;
 }
@@ -148,7 +155,13 @@ export function toPose(frame) {
   if (!frame.world) return null;
   const landmarks = frame.image.map(([x, y, visibility]) => ({ x, y, visibility }));
   const visible = isSeen((i) => landmarks[i].visibility);
-  return { landmarks, world: frame.world.map(([x, y, z]) => ({ x, y, z })), visible, t: frame.t };
+  const hands = frame.hands
+    ? {
+        left: frame.hands.left ? frame.hands.left.map(([x, y, z]) => ({ x, y, z })) : null,
+        right: frame.hands.right ? frame.hands.right.map(([x, y, z]) => ({ x, y, z })) : null,
+      }
+    : undefined;
+  return { landmarks, world: frame.world.map(([x, y, z]) => ({ x, y, z })), visible, t: frame.t, ...(hands ? { hands } : {}) };
 }
 
 /**
@@ -302,6 +315,7 @@ export function createPhoneCapture(baseUrl, sessionId, { onPose, onImage, onStat
         t: frame.t,
         world: frame.world,
         image: frame.image.map(([x, y, v]) => [x * size.width, y * size.height, v]),
+        ...(frame.hands ? { hands: frame.hands } : {}),
         valid: pose.visible,
       });
     }

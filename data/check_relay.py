@@ -88,10 +88,10 @@ async def main() -> None:
         r = await c.get(live, params={"since": 3})
         expect(r.json()["next"] == 5 and r.json()["frames"][0] == {"t": 10.1}, "a frame without body stays a bare t")
         # The camera image rides in its frame, with or without a body; the next test starts at 7.
-        with_image = [{**frame(10.16), "jpeg": "/9j/4AAQ"}, {"t": 10.2, "jpeg": "/9j/4AAR"}]
+        with_image = [{**frame(10.16), "jpeg": "/9j/4AAQ", "hands": {"left": [[0.01 * i, 0.0, 0.0] for i in range(21)], "right": None}}, {"t": 10.2, "jpeg": "/9j/4AAR"}]
         await c.post(live, json={"width": 1280, "height": 720, "frames": with_image})
         r = await c.get(live, params={"since": 5})
-        expect(r.json()["frames"] == with_image, "frames keep their jpeg, with or without a body")
+        expect(r.json()["frames"] == with_image, "frames keep their jpeg and 21-point hands, with or without a body")
 
         # Long poll: the GET waits and answers as soon as the phone posts.
         async def post_later():

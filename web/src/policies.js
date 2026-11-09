@@ -10,23 +10,84 @@ export const LEVELS = [
   { id: 'g1-stand-step-3000000', label: '3 millones de pasos' },
   { id: 'g1-stand-step-10000000', label: '10 millones de pasos' },
   { id: 'g1-stand-step-20000768', label: '20 millones de pasos' },
-  // stand-v2: v1 plus 20 M with stronger pushes. Holds every one of the web's pushes, but by
-  // pivoting on one foot (55 deg/s); restored from git (abea922) for the Gym's ladder.
-  { id: 'g1-stand-v2', label: '40 millones de pasos (4 de 4 empujones, girando)' },
-  // stand-v7b: v2 (40 M, stronger pushes) plus 8 M with the stance terms. It no longer pivots
-  // (0,9 deg/s against v2's 55) but holds 3 of 4 of the web's pushes (training.evaluate).
   { id: 'g1-stand-quiet', label: '48 millones de pasos, quieta (3 de 4 empujones)' },
-  // stand-v7d: 12 M more from v7b. Just as quiet (1,6 deg/s) and holds 3,6 of 4 pushes, so it is the
-  // final one (docs/bitacora/2026-10-24-1300-juan-landing-caminata.md).
-  { id: 'g1-stand', label: '60 millones de pasos' },
+  { id: 'g1-stand-step-100000000', label: '100 millones de pasos (4 de 4 empujones)' },
+  { id: 'g1-stand-v2', label: '100 millones de pasos (stand v2)' },
+  { id: 'g1-stand-step-300000000', label: '300 millones de pasos (4 mundos, 4 de 4 empujones)' },
+  { id: 'g1-stand', label: '300 millones de pasos' },
 ].filter(({ id }) => URLS[`../../training/policies/${id}.onnx`]);
 
 export const FINAL_LEVEL = 'g1-stand';
 
+export const ROBOT_MODELS = [
+  { id: 'unitree_g1', label: 'Unitree G1 (29 motores + manos 5 dedos)' },
+  { id: 'luigi_lab3', label: 'Robot Explorador Lab III — Luigi (Arduino UNO + HC-SR04 + APDS-9960)' },
+];
+
 // Imitation policies (training/imitate.py): each learned one clip, and does it with physics instead
-// of standing still. `clip` is the PoseClip/RobotMotion it learned; the option shows only for it.
+// of standing still. `clip` (or `clips`) is the PoseClip in the gallery; `motion` is the balanced
+// RobotMotion reference the policy was trained on.
 export const IMITATIONS = [
-  { id: 'g1-walk', clip: 'clip_2026-10-23_caminar-perfil_01', label: 'Imitando el video, con física (en entrenamiento)' },
+  {
+    id: 'g1-walk',
+    robot: 'unitree_g1',
+    clip: 'clip_caminar-perfil-gvhmr',
+    clips: ['clip_caminar-perfil-gvhmr', 'clip_caminar-01-gvhmr', 'clip_caminar-02-gvhmr', 'clip_2026-10-23_caminar-perfil_01'],
+    motion: 'clip_caminar-perfil-gvhmr-balanced',
+    label: 'Caminar imitando el video, con física (65 % de empujones)',
+  },
+  {
+    id: 'g1-run',
+    clip: 'clip_correr-perfil-gvhmr',
+    clips: ['clip_correr-perfil-gvhmr', 'clip_frente-correr-01-gvhmr', 'clip_2026-10-23_correr-perfil_01'],
+    motion: 'clip_correr-perfil-gvhmr-balanced',
+    label: 'Correr imitando el video, con física',
+  },
+  {
+    id: 'g1-jacks',
+    clip: 'clip_jacks-01-gvhmr',
+    clips: ['clip_jacks-01-gvhmr', 'clip_jacks-grupo-01-gvhmr', 'clip_2026-10-24_jumping-jacks-nasm_01'],
+    motion: 'clip_jacks-01-gvhmr-balanced',
+    label: 'Saltos de tijera imitando el video, con física',
+  },
+  {
+    id: 'g1-saludar',
+    clip: 'clip_saludar-02-gvhmr',
+    clips: ['clip_saludar-02-gvhmr', 'clip_lavar-04-gvhmr'],
+    motion: 'clip_saludar-02-gvhmr-balanced',
+    label: 'Gestos imitando el video, con física',
+  },
+  {
+    id: 'g1-dedos',
+    clip: 'clip_dedos-01-gvhmr',
+    motion: 'clip_dedos-01-gvhmr-balanced',
+    label: 'Contar con los dedos imitando el video, con física',
+  },
+  {
+    id: 'g1-bailar',
+    clip: 'clip_bailar-01-gvhmr',
+    clips: ['clip_bailar-01-gvhmr', 'clip_bailar-grupo-02-gvhmr'],
+    motion: 'clip_bailar-01-gvhmr-balanced',
+    label: 'Bailar imitando el video, con física',
+  },
+  {
+    id: 'g1-frente',
+    clip: 'clip_frente-04-gvhmr',
+    motion: 'clip_frente-04-gvhmr-balanced',
+    label: 'Caminar hacia la cámara imitando el video, con física',
+  },
+  {
+    id: 'g1-sentarse',
+    clip: 'clip_sentarse-02-gvhmr',
+    motion: 'clip_sentarse-02-gvhmr-balanced',
+    label: 'Sentarse y levantarse imitando el video, con física',
+  },
+  {
+    id: 'luigi-lab3',
+    robot: 'luigi_lab3',
+    clip: '__luigi__',
+    label: 'Robot Lab III (Luigi) · Exploración y evasión con física (5 M pasos, 200 RPM)',
+  },
 ].filter(({ id }) => URLS[`../../training/policies/${id}.onnx`]);
 
 export const imitationOf = (id) => IMITATIONS.find((imitation) => imitation.id === id) ?? null;

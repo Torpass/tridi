@@ -13,5 +13,159 @@
     "clip": "clip_synthetic_march_01",
     "title": "Marcha sintética",
     "credit": "Generada por código, para pruebas"
+  },
+  {
+    "clip": "clip_caminar-perfil-gvhmr",
+    "title": {
+      "es": "Caminar",
+      "en": "Walking"
+    },
+    "credit": {
+      "es": "Video: Mixkit 4855, hombre caminando de perfil",
+      "en": "Video: Mixkit 4855, man walking, side view"
+    }
+  },
+  {
+    "clip": "clip_correr-perfil-gvhmr",
+    "title": {
+      "es": "Correr",
+      "en": "Running"
+    },
+    "credit": {
+      "es": "Video: Mixkit 4831, mujer corriendo en un parque",
+      "en": "Video: Mixkit 4831, woman running in a park"
+    }
+  },
+  {
+    "clip": "clip_frente-04-gvhmr",
+    "title": {
+      "es": "Caminar hacia la cámara",
+      "en": "Walking toward the camera"
+    },
+    "credit": {
+      "es": "Video: Pexels 7253202, hombre de noche en una plaza",
+      "en": "Video: Pexels 7253202, man in a square at night"
+    }
+  },
+  {
+    "clip": "clip_frente-correr-01-gvhmr",
+    "title": {
+      "es": "Correr hacia la cámara",
+      "en": "Running toward the camera"
+    },
+    "credit": {
+      "es": "Video: Pexels 3044159, mujer corriendo en un parque",
+      "en": "Video: Pexels 3044159, woman running in a park"
+    }
+  },
+  {
+    "clip": "clip_bailar-01-gvhmr",
+    "title": {
+      "es": "Bailar",
+      "en": "Dancing"
+    },
+    "credit": {
+      "es": "Video: Pexels 8111782, mujer bailando",
+      "en": "Video: Pexels 8111782, woman dancing"
+    }
+  },
+  {
+    "clip": "clip_jacks-01-gvhmr",
+    "title": {
+      "es": "Saltos de tijera",
+      "en": "Jumping jacks"
+    },
+    "credit": {
+      "es": "Video: Pexels 4764220, mujer haciendo saltos de tijera",
+      "en": "Video: Pexels 4764220, woman doing jumping jacks"
+    }
+  },
+  {
+    "clip": "clip_sentarse-02-gvhmr",
+    "title": {
+      "es": "Sentarse",
+      "en": "Sitting down"
+    },
+    "credit": {
+      "es": "Video: Pexels 8979700, hombre se sienta en una silla",
+      "en": "Video: Pexels 8979700, man sits on a chair"
+    }
+  },
+  {
+    "clip": "clip_caminar-01-gvhmr",
+    "title": {
+      "es": "Caminar alejándose",
+      "en": "Walking away"
+    },
+    "credit": {
+      "es": "Video: Pexels 5992458, hombre de espaldas en la costa",
+      "en": "Video: Pexels 5992458, man walking away on a coast"
+    }
+  },
+  {
+    "clip": "clip_bailar-grupo-02-gvhmr",
+    "title": {
+      "es": "Baile en grupo",
+      "en": "Group dance"
+    },
+    "credit": {
+      "es": "Video: Pexels 10274941, coreografía de 3 personas",
+      "en": "Video: Pexels 10274941, 3-person choreography"
+    }
+  },
+  {
+    "clip": "clip_jacks-grupo-01-gvhmr",
+    "title": {
+      "es": "Saltos en grupo",
+      "en": "Group jumping jacks"
+    },
+    "credit": {
+      "es": "Video: Pexels 6326725, dos hombres en el gimnasio",
+      "en": "Video: Pexels 6326725, two men at the gym"
+    }
+  },
+  {
+    "clip": "clip_caminar-02-gvhmr",
+    "title": {
+      "es": "Saltos y sentadillas",
+      "en": "Jumps and squats"
+    },
+    "credit": {
+      "es": "Video: Pexels 6156132, hombre haciendo ejercicio",
+      "en": "Video: Pexels 6156132, man exercising"
+    }
+  },
+  {
+    "clip": "clip_saludar-02-gvhmr",
+    "title": {
+      "es": "Gestos",
+      "en": "Gestures"
+    },
+    "credit": {
+      "es": "Video: Pexels 4492700, mujer saluda y tira besos",
+      "en": "Video: Pexels 4492700, woman waving and blowing kisses"
+    }
+  },
+  {
+    "clip": "clip_dedos-01-gvhmr",
+    "title": {
+      "es": "Contar con los dedos",
+      "en": "Counting on fingers"
+    },
+    "credit": {
+      "es": "Video: Pexels 7563954, mujer contando con la mano",
+      "en": "Video: Pexels 7563954, woman counting on her fingers"
+    }
+  },
+  {
+    "clip": "clip_lavar-04-gvhmr",
+    "title": {
+      "es": "Lavar platos",
+      "en": "Washing dishes"
+    },
+    "credit": {
+      "es": "Video: Pexels 4108715, mujer lavando en la cocina",
+      "en": "Video: Pexels 4108715, woman washing dishes in the kitchen"
+    }
   }
 ]

@@ -4,7 +4,7 @@ Video (o `.zip` de videos) → se elige y se sigue a un sujeto → su pose 3D po
 
 La cámara en vivo (el mismo `PoseClip`, en el navegador) está en [`live/`](live).
 
-**Espejo para deploy:** [`juanevillam/tridi-data`](https://github.com/juanevillam/tridi-data) copia `main` del repo del equipo; no se commitea ahí. Tras cada ship: `ALLOW_MAIN_PUSH=1 git push mirror origin/main:main` (el remoto `mirror` apunta a ese repo; la variable salta el hook que bloquea pushes a `main`, que aquí no aplica porque se copia `main` tal cual). Hoy no se despliega nada desde ahí: el servidor de videos va a correr en la Mac de Juan con un túnel.
+**Deploy:** el servidor de videos corre en la Mac de Juan con un túnel (`data/serve.sh`); no hay espejo de este repo.
 
 ## Uso
 

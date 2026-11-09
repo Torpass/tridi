@@ -11,8 +11,10 @@
 // Hand points (MediaPipe): 0 wrist; thumb 1-4; index 5-8; middle 9-12; ring 13-16; pinky 17-20.
 import * as THREE from 'three';
 
-// Each Dex3 finger and the person's segments that drive it, proximal first: [from, to] points.
-const FINGERS = {
+// Each finger and the person's segments that drive it, proximal first: [from, to] points.
+// On a 3-finger hand (Dex3), the middle finger averages middle, ring and pinky; on a 5-finger hand
+// (Inspire), each of the five fingers follows its own human finger independently.
+const FINGERS_3 = {
   thumb: { joints: ['thumb_0', 'thumb_1', 'thumb_2'], links: ['thumb_1', 'thumb_2'], human: [[[2, 3]], [[3, 4]]] },
   index: { joints: ['index_0', 'index_1'], links: ['index_0', 'index_1'], human: [[[5, 6]], [[6, 8]]] },
   middle: {
@@ -21,6 +23,14 @@ const FINGERS = {
     human: [[[9, 10], [13, 14], [17, 18]], [[10, 12], [14, 16], [18, 20]]],
   },
 };
+const FINGERS_5 = {
+  thumb: { joints: ['thumb_0', 'thumb_1', 'thumb_2'], links: ['thumb_1', 'thumb_2'], human: [[[2, 3]], [[3, 4]]] },
+  index: { joints: ['index_0', 'index_1'], links: ['index_0', 'index_1'], human: [[[5, 6]], [[6, 8]]] },
+  middle: { joints: ['middle_0', 'middle_1'], links: ['middle_0', 'middle_1'], human: [[[9, 10]], [[10, 12]]] },
+  ring: { joints: ['ring_0', 'ring_1'], links: ['ring_0', 'ring_1'], human: [[[13, 14]], [[14, 16]]] },
+  pinky: { joints: ['pinky_0', 'pinky_1'], links: ['pinky_0', 'pinky_1'], human: [[[17, 18]], [[18, 20]]] },
+};
+const FINGERTIP_M = 0.04; // distal phalanx tip offset past the last joint in meters
 // Coordinate descent, as retarget.js: few joints, so a few rounds settle.
 const ITERATIONS = 8;
 const PROBE = 0.02; // rad
@@ -59,6 +69,7 @@ export function createFingerSolver(hands) {
     }
     sides[side] = { bodies, byName, of: (short) => bodies.find((b) => b.short === short) };
   }
+  const FINGERS = sides.left.of('ring_0') ? FINGERS_5 : FINGERS_3;
 
   const q = new THREE.Quaternion();
   const turn = new THREE.Quaternion();
@@ -147,11 +158,44 @@ export function createFingerSolver(hands) {
     return angles;
   }
 
+  /** Origin of a finger link in the hand frame for the angles in `angles`. */
+  function origin(side, angles, short) {
+    const b = sides[side].of(short);
+    if (!b.parent) return b.offset.clone();
+    const pShort = b.parent.replace(`${side}_hand_`, '').replace('_link', '');
+    return origin(side, angles, pShort).add(segment(side, angles, pShort).multiplyScalar(b.offset.length()));
+  }
+
+  /**
+   * 3D fingertip position error (in meters, per finger) between the solved robot hand and the
+   * person's finger directions scaled to the robot's phalanx lengths.
+   */
+  function fingertipErrors(side, angles, points, tipLength = FINGERTIP_M) {
+    x.addVectors(points[5], points[17]).multiplyScalar(0.5).sub(points[0]).normalize();
+    z.subVectors(points[5], points[17]);
+    z.addScaledVector(x, -z.dot(x)).normalize();
+    y.crossVectors(z, x);
+    const out = {};
+    for (const [name, finger] of Object.entries(FINGERS)) {
+      const [link0, link1] = finger.links;
+      const base = origin(side, angles, link0);
+      const mid = origin(side, angles, link1);
+      const robotTip = mid.clone().addScaledVector(segment(side, angles, link1), tipLength);
+      const len0 = sides[side].of(link1).offset.length();
+      const [u0, u1] = finger.human.map((pairs) => local(points, pairs));
+      const humanTip = base.clone().addScaledVector(u0, len0).addScaledVector(u1, tipLength);
+      out[name] = robotTip.distanceTo(humanTip);
+    }
+    return out;
+  }
+
   return {
     solve,
     /** Forgets the previous frames (the hand was lost: the next one starts fresh). */
     reset: (side) => (side ? delete last[side] : Object.keys(last).forEach((k) => delete last[k])),
     segment,
+    origin,
+    fingertipErrors,
     /** The finger bodies of one side, in hands.json's order (for drawing them). */
     joints: (side) => sides[side].bodies,
   };

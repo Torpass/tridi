@@ -19,7 +19,7 @@ import secrets
 import time
 from dataclasses import dataclass, field
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
 
 # 8 characters from 31 (no 0/o/1/l/i, which are misread from a QR or by hand): ~40 bits, not
@@ -59,6 +59,7 @@ MAX_WAIT_MS = 2000
 MAX_SESSIONS = 20
 
 JOINTS = 33
+HAND_JOINTS = 21
 
 
 @dataclass
@@ -101,11 +102,23 @@ def _number(x) -> bool:
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
-def _points(value, what: str, i: int) -> str | None:
-    if not isinstance(value, list) or len(value) != JOINTS:
-        return f"el cuadro {i} debe traer {JOINTS} puntos en {what}"
+def _points(value, what: str, i: int, count: int = JOINTS) -> str | None:
+    if not isinstance(value, list) or len(value) != count:
+        return f"el cuadro {i} debe traer {count} puntos en {what}"
     if not all(isinstance(p, list) and len(p) == 3 and all(_number(v) for v in p) for p in value):
         return f"cada punto de {what} del cuadro {i} debe ser 3 números"
+    return None
+
+
+def _hands(value, i: int) -> str | None:
+    if not isinstance(value, dict):
+        return f"hands del cuadro {i} debe ser un objeto {{left, right}}"
+    for side in ("left", "right"):
+        h = value.get(side)
+        if h is not None:
+            problem = _points(h, f"hands.{side}", i, HAND_JOINTS)
+            if problem:
+                return problem
     return None
 
 
@@ -129,6 +142,11 @@ def _clean_batch(batch) -> tuple[dict | None, str | None]:
             if problem:
                 return None, problem
             frame.update(world=f["world"], image=f["image"])
+            if "hands" in f and f["hands"] is not None:
+                problem = _hands(f["hands"], i)
+                if problem:
+                    return None, problem
+                frame["hands"] = {"left": f["hands"].get("left"), "right": f["hands"].get("right")}
         if "jpeg" in f:
             jpeg = f["jpeg"]
             if not isinstance(jpeg, str) or len(jpeg) > MAX_JPEG_CHARS or not BASE64.match(jpeg):
@@ -213,3 +231,67 @@ async def delete_session(session_id: str) -> Response:
     if s:
         s.changed.set()  # a Mac waiting on it answers now, and gets 404 on its next request
     return Response(status_code=204)
+
+
+@router.websocket("/live/{session_id}/ws")
+async def live_ws(websocket: WebSocket, session_id: str, role: str = "mac", since: int = 0) -> None:
+    """Low-latency WebSocket relay between the phone ('phone') and the Mac ('mac'), sharing the
+    same in-memory Session as HTTP POST/GET /live/{session_id}/poses."""
+    s = sessions.get(session_id) if SESSION_ID.match(session_id) else None
+    if s is None:
+        await websocket.close(code=4404)
+        return
+    await websocket.accept()
+    try:
+        if role == "phone":
+            while True:
+                raw = await websocket.receive_text()
+                if len(raw) > MAX_BATCH_BYTES:
+                    await websocket.send_json({"error": f"el lote pesa más de {MAX_BATCH_BYTES // 1024} KB"})
+                    continue
+                try:
+                    batch = json.loads(raw)
+                except (json.JSONDecodeError, UnicodeDecodeError):
+                    continue
+                batch, problem = _clean_batch(batch)
+                if problem:
+                    await websocket.send_json({"error": problem})
+                    continue
+                now = time.time()
+                s.touched = s.sent_at = now
+                s.width, s.height = batch["width"], batch["height"]
+                s.frames.extend(batch["frames"])
+                if len(s.frames) > KEEP_FRAMES:
+                    drop = len(s.frames) - KEEP_FRAMES
+                    del s.frames[:drop]
+                    s.first_seq += drop
+                for f in s.frames[:-KEEP_IMAGE_FRAMES]:
+                    f.pop("jpeg", None)
+                s.changed.set()
+                await websocket.send_json({
+                    "received": len(batch["frames"]),
+                    "next": s.next_seq,
+                    "watched_s": None if s.watched_at is None else round(now - s.watched_at, 2),
+                })
+        else:
+            cur = since
+            while session_id in sessions:
+                s.touched = s.watched_at = time.time()
+                if cur < s.next_seq:
+                    start = max(cur - s.first_seq, 0)
+                    await websocket.send_json({
+                        "next": s.next_seq,
+                        "frames": s.frames[start:],
+                        "width": s.width,
+                        "height": s.height,
+                        "sent_s": None if s.sent_at is None else round(time.time() - s.sent_at, 2),
+                    })
+                    cur = s.next_seq
+                s.changed.clear()
+                try:
+                    await asyncio.wait_for(s.changed.wait(), 1.0)
+                except TimeoutError:
+                    pass
+            await websocket.close(code=4404)
+    except WebSocketDisconnect:
+        pass

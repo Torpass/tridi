@@ -62,6 +62,122 @@
   color-scheme: dark;
 }
 
+/* Languages (src/i18n.js): every translated string is in the page once per language, and the
+   one <html data-lang> names shows. Switching flips that attribute: nothing reloads. */
+html[data-lang='es'] .t[lang='en'],
+html[data-lang='en'] .t[lang='es'] {
+  display: none !important;
+}
+
+/* Language selector: globe-only trigger button with popover menu (zero width change across languages). */
+.lang-switch {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.lang-switch .lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  min-height: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: rgb(241 243 238 / 0.04);
+  backdrop-filter: blur(10px);
+  color: var(--ink-soft);
+  cursor: pointer;
+  transition: color 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+}
+
+.lang-switch .lang-trigger:hover,
+.lang-switch.open .lang-trigger {
+  border-color: var(--signal);
+  background: rgb(200 255 46 / 0.12);
+  color: var(--signal);
+  box-shadow: none;
+}
+
+.lang-switch .lang-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+.lang-switch .lang-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  display: grid;
+  gap: 2px;
+  min-width: 132px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  background: rgb(8 9 11 / 0.94);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 36px -12px rgb(0 0 0 / 0.85);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s;
+}
+
+.lang-switch.open .lang-menu {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.lang-switch .lang-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 32px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--ink-soft);
+  font: 500 12px/1 var(--display);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.lang-switch .lang-menu button:hover {
+  background: rgb(241 243 238 / 0.08);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+.lang-switch .lang-check {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--signal);
+  opacity: 0;
+}
+
+html[data-lang='es'] .lang-switch .lang-menu button[lang='es'],
+html[data-lang='en'] .lang-switch .lang-menu button[lang='en'] {
+  background: rgb(200 255 46 / 0.12);
+  color: var(--signal);
+}
+
+html[data-lang='es'] .lang-switch .lang-menu button[lang='es'] .lang-check,
+html[data-lang='en'] .lang-switch .lang-menu button[lang='en'] .lang-check {
+  opacity: 1;
+}
+
 /* Short phone versions of some lines: .only-wide is the long copy, .only-narrow its phone
    version. Phones and small tablets (860 px, the landing's phone layout) read the short one. */
 .only-narrow {
@@ -333,6 +449,11 @@ select:disabled {
 
 /* Simulations */
 
+.page.sims {
+  width: min(1720px, 100%);
+  padding: 14px 20px 28px;
+}
+
 .page-head {
   display: flex;
   flex-wrap: wrap;
@@ -346,12 +467,12 @@ select:disabled {
 
 .sims-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 410px;
   /* A tall side column (the training box with its network) must not stretch the row: the controls
      stay right under the scene, where they can be changed while watching the robot. */
   align-items: start;
-  gap: 20px;
-  margin-top: 20px;
+  gap: 18px;
+  margin-top: 14px;
 }
 
 .sims-main {
@@ -392,6 +513,11 @@ select:disabled {
   display: block;
   width: 100%;
   height: 100%;
+  cursor: grab !important;
+}
+
+.pane canvas:active {
+  cursor: grabbing !important;
 }
 
 /* Until the robot arrives its canvas stays invisible and the loader (below) takes its place. */
@@ -550,6 +676,7 @@ select:disabled {
 .controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  align-items: stretch;
   gap: 16px;
 }
 
@@ -659,9 +786,12 @@ select:disabled {
 }
 
 .icon-btn.speed {
-  width: auto;
-  padding: 0 14px;
-  border-radius: var(--r-1);
+  width: 68px;
+  min-width: 68px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 700;
+  justify-content: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -703,6 +833,22 @@ select:disabled {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
+}
+
+.grasp-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.mode.grasp-actions {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.mode.grasp-actions button {
+  font-size: 13px;
+  padding: 0 6px;
 }
 
 /* The person's pane with the source video: the recording, its skeleton over it, no 3D skeleton. */
@@ -751,11 +897,29 @@ select:disabled {
 }
 
 .sims-list {
+  /* Matched to .sims-main height via height:0 + min-height:100% so all three sections stay visually
+     balanced at any zoom level while #gallery scrolls internally. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  height: 0;
+  min-height: 100%;
+  max-height: 100%;
   padding: 20px;
   border-radius: var(--radius);
   background: var(--surface);
   backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
+  overflow-y: auto;
+}
+
+.sims-list #gallery {
+  flex: 1;
+  min-height: 160px; /* with the training box open, still room for two clips */
+  overflow-y: auto;
+  overscroll-behavior: contain; /* the end of the list does not scroll the page */
+  scrollbar-width: thin;
 }
 
 .sims-list h2 {
@@ -821,7 +985,7 @@ select:disabled {
   display: none;
 }
 
-/* #/red/<train id> (screens/net.js): the same view, full size. */
+/* #/net/<train id> (screens/net.js): the same view, full size. */
 .net-screen {
   display: grid;
   gap: var(--s-4);
@@ -1015,7 +1179,7 @@ select:disabled {
 
 .card {
   display: grid;
-  gap: 2px;
+  gap: 4px;
   width: 100%;
   min-height: 0;
   padding: 14px 16px;
@@ -1023,6 +1187,217 @@ select:disabled {
   text-align: left;
   font-weight: 400;
   line-height: 1.35;
+}
+
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.card-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 600 11px/1.3 var(--mono);
+  letter-spacing: 0.02em;
+}
+
+.card-badge.trained {
+  background: rgb(200 255 46 / 0.12);
+  color: var(--signal);
+  border: 1px solid rgb(200 255 46 / 0.34);
+}
+
+.card-badge.trainable {
+  background: rgb(245 158 11 / 0.14);
+  color: #fbbf24;
+  border: 1px solid rgb(245 158 11 / 0.34);
+}
+
+.gallery-section-head {
+  padding: 6px 2px 2px;
+  font: 600 12px/1.2 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.train-config {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 6px;
+  padding: 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+}
+
+.train-cfg-worlds {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.train-cfg-worlds strong {
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.train-actions-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.train-actions-row .button {
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 8px;
+  font-size: 12.5px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.luigi-sim-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.luigi-sim-panel[hidden],
+#gallery[hidden],
+#pick-heading[hidden],
+.grasp-box[hidden],
+.field[hidden],
+.mode[hidden],
+.mode-note[hidden],
+select[hidden] {
+  display: none !important;
+}
+
+.luigi-sim-head {
+  display: grid;
+  gap: 6px;
+}
+
+.luigi-sim-head .card-badge {
+  justify-self: start;
+  width: fit-content;
+}
+
+.luigi-sim-head h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.luigi-sim-head .train-text {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+
+.luigi-telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.luigi-tel-card {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  height: 62px;
+  min-height: 62px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.luigi-tel-card span {
+  font: 600 11px/1.2 var(--mono);
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.luigi-tel-card strong {
+  display: block;
+  font: 600 13.5px/1.25 var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--signal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.luigi-drive-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--bg);
+}
+
+.luigi-drive-label {
+  font: 600 11px/1.2 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.luigi-drive-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.luigi-cmd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.luigi-cmd-btn:hover {
+  border-color: var(--signal);
+}
+
+.luigi-cmd-btn[aria-pressed='true'] {
+  border-color: var(--signal);
+  background: rgb(200 255 46 / 0.14);
+  color: var(--signal);
+}
+
+#luigi-sim-panel .train-actions-row {
+  grid-template-columns: 1fr;
+}
+
+.train-badge-line {
+  margin: 0 0 6px;
 }
 
 .card strong {
@@ -1725,6 +2100,282 @@ select optgroup {
   display: none;
 }
 
+/* ---- Milestones & Field Notes (#/milestones, #/avances) ---- */
+.page.milestones-page {
+  width: min(1260px, 100%);
+  max-width: 1260px;
+  margin: 0 auto;
+  padding: var(--s-5) var(--s-5) var(--s-8, 64px);
+  display: grid;
+  gap: var(--s-5);
+}
+
+.milestones-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+.milestones-title-group {
+  flex: 1 1 420px;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.milestones-lede {
+  margin: 0;
+  color: var(--muted);
+  max-width: none;
+  width: 100%;
+}
+
+.milestone-tabs {
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: var(--surface);
+  width: 100%;
+  max-width: 720px;
+}
+
+.milestone-tab {
+  min-height: 42px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
+  font: 600 13px/1.2 var(--mono);
+  letter-spacing: 0.02em;
+  text-align: center;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+}
+
+.milestone-tab:hover {
+  color: var(--ink);
+}
+
+.milestone-tab[aria-selected='true'] {
+  border-color: rgb(200 255 46 / 0.35);
+  background: rgb(200 255 46 / 0.14);
+  color: var(--signal);
+}
+
+.milestone-card {
+  display: grid;
+  gap: var(--s-4);
+  padding: var(--s-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  backdrop-filter: blur(14px);
+  box-shadow: var(--shadow);
+}
+
+.milestone-card[hidden] {
+  display: none !important;
+}
+
+.milestone-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+  flex-wrap: wrap;
+}
+
+.milestone-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgb(255 255 255 / 0.04);
+  font: 600 12px/1.3 var(--mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.milestone-badge.signal {
+  border-color: rgb(200 255 46 / 0.35);
+  background: rgb(200 255 46 / 0.12);
+  color: var(--signal);
+}
+
+.milestone-cta {
+  min-height: 40px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.milestone-card h2 {
+  margin: 0;
+  font: 600 clamp(22px, 2.6vw, 32px) / 1.2 var(--title);
+  letter-spacing: -0.02em;
+}
+
+.milestone-intro {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 16px;
+  line-height: 1.65;
+  max-width: none;
+  width: 100%;
+}
+
+.milestone-videos {
+  display: grid;
+  gap: var(--s-4);
+  margin-top: var(--s-2);
+  align-items: stretch;
+}
+
+.milestone-videos.two-col {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.milestone-videos.one-col {
+  grid-template-columns: 1fr;
+}
+
+.milestone-video-box {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  background: #070809;
+}
+
+.milestone-video-head {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  font: 600 12px/1.35 var(--mono);
+  color: var(--ink);
+  background: rgb(255 255 255 / 0.02);
+}
+
+.milestone-video-box video {
+  display: block;
+  width: 100%;
+  height: 360px;
+  max-height: 360px;
+  object-fit: contain;
+  background: #050608;
+}
+
+.milestone-videos.two-col .milestone-video-box video {
+  height: 310px;
+  max-height: 310px;
+  object-fit: contain;
+}
+
+.milestone-video-box figcaption {
+  flex: 1;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.milestone-subhead {
+  margin: var(--s-2) 0 0;
+  font: 600 18px/1.3 var(--title);
+  color: var(--ink);
+}
+
+.milestone-gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s-3);
+}
+
+.milestone-photo-card {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  overflow: hidden;
+  background: #0a0c0f;
+}
+
+.milestone-photo-tag {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  font: 600 11px/1.25 var(--mono);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--signal);
+  background: rgb(255 255 255 / 0.02);
+}
+
+.milestone-photo-card img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  object-fit: cover;
+  background: #0d1014;
+}
+
+.milestone-photo-card figcaption {
+  padding: 10px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  border-top: 1px solid var(--line);
+}
+
+.milestone-steps-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-3);
+}
+
+.milestone-steps-grid.three-col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.milestone-step {
+  padding: var(--s-4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: rgb(255 255 255 / 0.02);
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.milestone-step h4 {
+  margin: 0;
+  font: 600 15px/1.35 var(--title);
+  color: var(--ink);
+}
+
+.milestone-step p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+@media (max-width: 900px) {
+  .milestone-videos.two-col,
+  .milestone-gallery-grid,
+  .milestone-steps-grid,
+  .milestone-steps-grid.three-col {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ---- Phones: the app screens ----
    Not the desktop screens stacked: a one-line header (back arrow and title), the scene first, the
    main buttons in a bar stuck to the bottom so they never scroll away, short notes, and lists
@@ -1894,6 +2545,13 @@ select optgroup {
 
   .sims-list {
     order: 2;
+    height: auto; /* phones: the clips are a row that scrolls sideways (#gallery below) */
+    min-height: 0;
+  }
+
+  .sims-list #gallery {
+    min-height: 0;
+    overflow-y: visible;
   }
 
   #controls {

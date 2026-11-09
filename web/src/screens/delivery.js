@@ -1,4 +1,4 @@
-// La entrega de un clip (#/entrega, #/entrega/<clip id>): what a client takes away once a video has
+// La entrega de un clip (#/delivery, #/delivery/<clip id>): what a client takes away once a video has
 // been trained, on one screen. The format is docs/contrato.md, "La entrega de un clip": delivery.json
 // sums up the policy and its test in four worlds, replay.json has every test episode at 25 Hz, and
 // `files` lists the downloads. The preloaded deliveries (data/deliveries/) are bundled, so they work
@@ -13,9 +13,12 @@ import { WORLDS } from 'tridi-physics';
 import { dressWorld } from '../looks/index.js';
 import { loader } from '../loader.js';
 import { attachRobot, onRobotProgress, robotView } from '../robot-host.js';
+import { LANGS, escapeHtml, lang, langSwitch, onLang } from '../i18n.js';
+import { clipName, spans as langSpans, worldName } from '../strings-names.js';
+import { A, FILE_WHAT_EN, L, T, WORLD_WHY_EN, t as tl } from './strings/delivery.js';
 import './delivery.css';
 
-export const title = 'Entrega';
+export { title } from './strings/delivery.js';
 
 // Bundled deliveries: the manifests now (about 14 KB each), every other file as a URL that
 // downloads nothing until it is used. no-inline keeps the small files (policy.json, scene.json) as
@@ -28,7 +31,7 @@ const FILE_URLS = import.meta.glob(['../../../data/deliveries/*/*', '!../../../d
   import: 'default',
 });
 
-// #/entrega with no id opens the walk, the first clip with a delivery.
+// #/delivery with no id opens the walk, the first clip with a delivery.
 const DEFAULT_CLIP = 'clip_2026-10-23_caminar-perfil_01';
 // Clip ids as data/server.py makes them (its CLIP_ID); nothing else is asked of the server.
 const CLIP_ID = /^clip_[A-Za-z0-9_-]+$/;
@@ -68,40 +71,51 @@ const CAMERA_OFFSET = { x: 2.45, y: 0.3, z: -0.85 };
 // The telemetry lanes, top to bottom. The two feet share one scale; every lane keeps its scale across
 // episodes, so clicking through them compares like with like. `short` is the name on a narrow chart.
 const LANES = [
-  { key: 'left', name: 'Pie izquierdo', short: 'Pie izq.', unit: 'N', digits: 0 },
-  { key: 'right', name: 'Pie derecho', short: 'Pie der.', unit: 'N', digits: 0 },
-  { key: 'pose', name: 'Error de pose', short: 'Err. pose', unit: 'rad', digits: 3 },
+  // name, short, limitLabel, limitShort: keys of strings/delivery.js
+  { key: 'left', name: 'laneLeft', short: 'laneLeftShort', unit: 'N', digits: 0 },
+  { key: 'right', name: 'laneRight', short: 'laneRightShort', unit: 'N', digits: 0 },
+  { key: 'pose', name: 'lanePose', short: 'lanePoseShort', unit: 'rad', digits: 3 },
   // The dataset's pelvis error is the 3D distance to the reference (height included), while the cut
   // measures it on the floor only: the line marks the cut's size, and a fall alone can cross it.
-  { key: 'pelvis', name: 'Error pelvis 3D', short: 'Err. pelvis 3D', unit: 'm', digits: 2, limit: OFF_PATH_M, limitLabel: 'corte · 0,6 m medidos en el piso (este error suma la altura)', limitShort: 'corte · en el piso' },
-  { key: 'height', name: 'Altura de pelvis', short: 'Altura pelvis', unit: 'm', digits: 2, limit: FALL_HEIGHT_M, limitLabel: 'caída · bajo 0,5 m', limitShort: 'caída' },
+  { key: 'pelvis', name: 'lanePelvis', short: 'lanePelvisShort', unit: 'm', digits: 2, limit: OFF_PATH_M, limitLabel: 'lanePelvisLimit', limitShort: 'lanePelvisLimitShort' },
+  { key: 'height', name: 'laneHeight', short: 'laneHeightShort', unit: 'm', digits: 2, limit: FALL_HEIGHT_M, limitLabel: 'laneHeightLimit', limitShort: 'laneHeightLimitShort' },
 ];
 
 // The world parameters drawn per episode (docs/contrato.md, "Mundos"). push_n is the strongest of
-// the episode's random pushes.
+// the episode's random pushes. name: a key of strings/delivery.js.
 const PARAMS = [
-  { key: 'friction', name: 'Fricción del piso', digits: 2, prefix: '', unit: '' },
-  { key: 'wind_mps', name: 'Viento', digits: 1, prefix: '', unit: ' m/s' },
-  { key: 'mass_scale', name: 'Masa', digits: 2, prefix: '×', unit: '' },
-  { key: 'motor_scale', name: 'Motores', digits: 2, prefix: '×', unit: '' },
-  { key: 'push_n', name: 'Empujón máximo', digits: 0, prefix: '', unit: ' N' },
+  { key: 'friction', name: 'paramFriction', digits: 2, prefix: '', unit: '' },
+  { key: 'wind_mps', name: 'paramWind', digits: 1, prefix: '', unit: ' m/s' },
+  { key: 'mass_scale', name: 'paramMass', digits: 2, prefix: '×', unit: '' },
+  { key: 'motor_scale', name: 'paramMotors', digits: 2, prefix: '×', unit: '' },
+  { key: 'push_n', name: 'paramPush', digits: 0, prefix: '', unit: ' N' },
 ];
 const paramText = ({ digits, prefix, unit }, v) => `${prefix}${trim(num(v, digits))}${unit}`;
-const rangeText = (param, [lo, hi]) => (lo === hi ? paramText(param, lo) : `${param.prefix}${trim(num(lo, param.digits))} a ${paramText(param, hi)}`);
+const rangeText = (param, [lo, hi]) => (lo === hi ? paramText(param, lo) : tl('rangeTo', { a: `${param.prefix}${trim(num(lo, param.digits))}`, b: paramText(param, hi) }));
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
-const num = (value, digits) => Number(value).toFixed(digits).replace('.', ',');
+// Numbers with the language's decimal mark: 1,25 in Spanish, 1.25 in English. Text drawn from
+// the current language is redrawn on a switch (relabel in showDelivery); markup with every
+// language passes N(), a number per language.
+const num = (value, digits, language = lang()) => {
+  const text = Number(value).toFixed(digits);
+  return language === 'es' ? text.replace('.', ',') : text;
+};
+const N = (value, digits) => (language) => num(value, digits, language);
 // "2,50" -> "2,5", "1,00" -> "1": for axis ticks and ranges, where the zeros say nothing.
-const trim = (text) => (text.includes(',') ? text.replace(/0+$/, '').replace(/,$/, '') : text);
-const int = new Intl.NumberFormat('es');
+const trim = (text) => (/[.,]/.test(text) ? text.replace(/0+$/, '').replace(/[.,]$/, '') : text);
+const int = { format: (value, language = lang()) => new Intl.NumberFormat(language).format(value) };
+// A world's name, and its name in one language, from its id (strings-names.js).
+const worldTitle = (world, language = lang()) => worldName(world.id, world.title)[language];
 const esc = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 const pad2 = (n) => String(n).padStart(2, '0');
 
-function bytes(n) {
+function bytes(n, language = lang()) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${num(n / 1024 / 1024, 2)} MB`;
+  return `${num(n / 1024 / 1024, 2, language)} MB`;
 }
+const bytesT = (n) => langSpans(Object.fromEntries(LANGS.map((l) => [l, bytes(n, l)])));
 
 // The smallest clean number (1, 1.5, 2, 2.5, 3, 4, 5, 6 or 8 times a power of ten) at least `v`: the
 // top of an axis. Steps this fine put the tallest value at two thirds of its lane or higher.
@@ -111,7 +125,14 @@ function niceCeil(v) {
   return [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10].map((m) => m * step).find((m) => m >= v * (1 - 1e-9));
 }
 
-class DeliveryError extends Error {}
+// A delivery that cannot open, said in every language: `key` of strings/delivery.js and its vars.
+class DeliveryError extends Error {
+  constructor(key, vars) {
+    super(key);
+    this.key = key;
+    this.vars = vars;
+  }
+}
 
 /**
  * Finds a delivery: the bundled copy first, then the video server's (docs/contrato.md).
@@ -122,10 +143,10 @@ async function loadDelivery(clipId, api, signal) {
   if (manifest) {
     return { manifest, source: 'static', url: (name) => (FILE_NAME.test(name ?? '') ? FILE_URLS[`${BUNDLED}${clipId}/${name}`] ?? null : null) };
   }
-  if (!CLIP_ID.test(clipId)) throw new DeliveryError(`"${clipId}" no es el id de un clip.`);
+  if (!CLIP_ID.test(clipId)) throw new DeliveryError('notClip', { id: escapeHtml(clipId) });
   await api?.checked;
   if (!api?.url) {
-    throw new DeliveryError('Esta entrega no viene con la página y el servidor de videos no está encendido ahora. Intenta de nuevo en un rato.');
+    throw new DeliveryError('noServer');
   }
   const base = `${api.url}/deliveries/${clipId}/`;
   let response;
@@ -133,21 +154,21 @@ async function loadDelivery(clipId, api, signal) {
     response = await fetch(`${base}delivery.json`, { signal });
   } catch (error) {
     if (signal.aborted) throw error;
-    throw new DeliveryError('El servidor de videos no responde ahora. Intenta de nuevo en un rato.');
+    throw new DeliveryError('serverDown');
   }
-  if (response.status === 404) throw new DeliveryError('El servidor no tiene una entrega de este clip: puede que su entrenamiento todavía no haya terminado.');
-  if (!response.ok) throw new DeliveryError(`El servidor de videos respondió ${response.status} al pedir la entrega.`);
+  if (response.status === 404) throw new DeliveryError('notFound');
+  if (!response.ok) throw new DeliveryError('serverStatus', { status: response.status });
   return { manifest: await response.json(), source: 'server', url: (name) => (FILE_NAME.test(name ?? '') ? new URL(name, base).href : null) };
 }
 
 export function mount(root, { api }, [param] = []) {
-  // "#/entrega/" gives an empty id, which a default parameter would let through.
+  // "#/delivery/" gives an empty id, which a default parameter would let through.
   const clipId = param || DEFAULT_CLIP;
   document.documentElement.classList.add('is-delivery');
   root.innerHTML = `
     <section class="dl">
-      <header class="dl-top"><a class="dl-back" href="#/">← Tridi</a><p class="dl-kicker">// Entrega · <span class="dl-mono">${esc(clipId)}</span></p></header>
-      <p class="dl-message" role="status">Buscando la entrega…</p>
+      <header class="dl-top"><a class="dl-back" href="#/">← Tridi</a><p class="dl-kicker">${T('kicker')} · <span class="dl-mono">${esc(clipId)}</span></p>${langSwitch('dl-lang')}</header>
+      <p class="dl-message" role="status">${T('searching')}</p>
     </section>`;
   const abort = new AbortController();
   let unmount = null;
@@ -159,12 +180,12 @@ export function mount(root, { api }, [param] = []) {
     .catch((error) => {
       if (gone) return;
       if (!(error instanceof DeliveryError)) console.error(error);
-      root.querySelector('.dl-message').textContent = error instanceof DeliveryError ? error.message : 'No se pudo abrir la entrega.';
+      root.querySelector('.dl-message').innerHTML = error instanceof DeliveryError ? T(error.key, error.vars) : T('openFailed');
       root.querySelector('.dl-message').classList.add('dl-error');
       // The deliveries that come with the page always open: offer them instead of a dead end.
       const bundled = Object.values(MANIFESTS).filter((manifest) => manifest.clip_id !== clipId);
       root.querySelector('.dl').insertAdjacentHTML('beforeend', bundled.map((manifest) => `
-        <a class="dl-get dl-other" href="#/entrega/${encodeURIComponent(manifest.clip_id)}">Ver la entrega de ${esc(manifest.title || manifest.clip_id)} →</a>`).join(''));
+        <a class="dl-get dl-other" href="#/delivery/${encodeURIComponent(manifest.clip_id)}">${T('seeOther', { title: (l) => clipName({ clip: manifest.clip_id, title: manifest.title || manifest.clip_id }).title[l] })}</a>`).join(''));
     });
   return () => {
     gone = true;
@@ -196,86 +217,105 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   const followed = policy.followed_s ?? null;
   const created = m.created_at ? new Date(m.created_at) : null;
   const createdText = created && !Number.isNaN(created.getTime())
-    ? `${created.toLocaleDateString('es', { day: 'numeric', month: 'short', year: 'numeric' })} · ${pad2(created.getHours())}:${pad2(created.getMinutes())}`
-    : '—';
-  const trainedTitles = worlds.filter((world) => trained.has(world.id)).map((world) => world.title);
-  const testOnly = worlds.length - trainedTitles.length;
+    ? (l) => `${created.toLocaleDateString(l, { day: 'numeric', month: 'short', year: 'numeric' })} · ${pad2(created.getHours())}:${pad2(created.getMinutes())}`
+    : () => '—';
+  const trainedWorlds = worlds.filter((world) => trained.has(world.id));
+  const testOnly = worlds.length - trainedWorlds.length;
+  const clipTitle = clipName({ clip: m.clip_id, title: m.title || m.clip_id }).title; // escaped
+  const bundledManifests = Object.values(MANIFESTS);
+  const switcherOptions = bundledManifests.some((b) => b.clip_id === m.clip_id) ? bundledManifests : [m, ...bundledManifests];
 
-  const status = [
-    followed !== null ? `Sigue ${num(followed, 2)} s de ${num(duration, 2)} s del clip (${Math.round((100 * followed) / duration)} %), en piso plano y sin empujones` : null,
-    trainedTitles.length ? `practicó solo en ${trainedTitles.join(', ').toLowerCase()}${testOnly ? `: los otros ${testOnly} mundos son prueba` : ''}` : null,
-    `${completed} de ${total} episodios de la prueba llegan al final`,
+  // The status line, put together in each language.
+  const statusIn = (l) => [
+    followed !== null ? L('statusFollow', { a: num(followed, 2, l), b: num(duration, 2, l), p: Math.round((100 * followed) / duration) }, l) : null,
+    trainedWorlds.length
+      ? L('statusTrained', { worlds: esc(trainedWorlds.map((w) => worldTitle(w, l)).join(', ').toLowerCase()) }, l) + (testOnly ? L('statusTestOnly', { n: testOnly }, l) : '')
+      : null,
+    L('statusCompleted', { a: completed, b: total }, l),
   ].filter(Boolean).join(' · ');
 
   root.innerHTML = `
     <section class="dl">
       <div class="dl-screen">
       <header class="dl-top">
-        <a class="dl-back" href="#/" aria-label="Volver al inicio">← Tridi</a>
+        <a class="dl-back" href="#/" ${A({ 'aria-label': 'backHome' })}>← Tridi</a>
         <div class="dl-name">
-          <p class="dl-kicker">// Entrega${source === 'server' ? ' · del servidor' : ''}</p>
-          <h1>${esc(m.title || m.clip_id)}</h1>
+          <p class="dl-kicker">${T('kicker')}${source === 'server' ? T('fromServer') : ''}</p>
+          <h1>${langSpans(clipTitle)}</h1>
         </div>
         <dl class="dl-meta">
-          <div><dt>Clip</dt><dd class="dl-mono dl-clip" title="${esc(m.clip_id)}">${esc(m.clip_id)}</dd></div>
-          <div><dt>Política</dt><dd><span class="dl-mono">${esc(policy.id ?? '—')}</span>${policy.task === 'mimic' ? ' · imitación' : ''}</dd></div>
-          <div><dt>Práctica</dt><dd>${policy.steps ? `${num(policy.steps / 1e6, 1)} M pasos` : '—'}</dd></div>
-          <div class="dl-follow"><dt>Sigue el clip</dt><dd>${followed !== null ? `${num(followed, 2)} s de ${num(duration, 2)} s` : '—'}
+          <div><dt>${T('clip')}</dt><dd>
+            <select class="dl-switcher" ${A({ 'aria-label': 'switchClipAria' })}>
+              ${switcherOptions.map((item) => {
+                const tObj = clipName({ clip: item.clip_id, title: item.title || item.clip_id }).title;
+                return `<option value="${esc(item.clip_id)}" ${item.clip_id === m.clip_id ? 'selected' : ''}>${esc(tObj[lang()])} (${esc(item.policy?.id ?? item.clip_id)})</option>`;
+              }).join('')}
+            </select>
+          </dd></div>
+          <div><dt>${T('policy')}</dt><dd><span class="dl-mono">${esc(policy.id ?? '—')}</span>${policy.task === 'mimic' ? T('mimic') : ''}</dd></div>
+          <div><dt>${T('practice')}</dt><dd>${policy.steps ? T('mSteps', { n: N(policy.steps / 1e6, 0) }) : '—'}</dd></div>
+          <div class="dl-follow"><dt>${T('follows')}</dt><dd>${followed !== null ? T('sOfS', { a: N(followed, 2), b: N(duration, 2) }) : '—'}
             <i class="dl-meter" aria-hidden="true"><b style="width:${followed !== null ? Math.min(100, (100 * followed) / duration) : 0}%"></b></i></dd></div>
-          <div><dt>Creada</dt><dd>${esc(createdText)}</dd></div>
+          <div><dt>${T('created')}</dt><dd>${langSpans(Object.fromEntries(LANGS.map((l) => [l, esc(createdText(l))])))}</dd></div>
         </dl>
-        <button class="dl-jump" type="button" data-jump="dl-files">Descargas · ${m.files?.length ?? 0} ↓</button>
+        <button class="dl-jump" type="button" data-jump="dl-files">${T('downloads', { n: m.files?.length ?? 0 })}</button>
+        ${langSwitch('dl-lang')}
       </header>
-      <p class="dl-status"><b>Estado</b> ${esc(status)}</p>
+      <p class="dl-status"><b>${T('state')}</b> ${langSpans(Object.fromEntries(LANGS.map((l) => [l, statusIn(l)])))}</p>
+      <div class="dl-explain">
+        <div class="dl-explain-item"><strong>${T('expClipHead')}</strong><span>${T('expClipBody')}</span></div>
+        <div class="dl-explain-item"><strong>${T('expPolicyHead')}</strong><span>${T('expPolicyBody')}</span></div>
+        <div class="dl-explain-item"><strong>${T('expPracticeHead')}</strong><span>${T('expPracticeBody')}</span></div>
+      </div>
 
       <div class="dl-main">
-        <section class="dl-win dl-sim" aria-label="Repetición en 3D">
-          <div class="dl-bar"><span>repetición — g1 · mujoco</span><span class="dl-sim-info">dataset ${DATASET_HZ} → 25 Hz</span></div>
+        <section class="dl-win dl-sim" ${A({ 'aria-label': 'simAria' })}>
+          <div class="dl-bar"><span>${T('simBar')}</span><span class="dl-sim-info">${T('simInfo', { a: DATASET_HZ, b: 25 })}</span></div>
           <div class="dl-view">
-            <div class="dl-boot">${loader()}<i class="dl-meter"><b class="dl-boot-fill"></b></i><span class="dl-boot-text">Preparando el mundo de física…</span></div>
+            <div class="dl-boot">${loader()}<i class="dl-meter"><b class="dl-boot-fill"></b></i><span class="dl-boot-text">${T('booting')}</span></div>
             <p class="dl-hud dl-hud-left"><span class="dl-hud-ep">—</span><span class="dl-hud-state"></span></p>
-            <p class="dl-hud dl-hud-right"><span class="dl-feet" title="Pie apoyado: el piso lo empuja hacia arriba"><i data-foot="left"></i>izq <i data-foot="right"></i>der</span><span class="dl-hud-t">0,00 s</span></p>
-            <p class="dl-hud dl-hud-note"><span>Poses del dataset, cuadro a cuadro: lo que hizo el robot con física en la prueba</span></p>
+            <p class="dl-hud dl-hud-right"><span class="dl-feet" ${A({ title: 'feetTitle' })}><i data-foot="left"></i>${T('footLeft')} <i data-foot="right"></i>${T('footRight')}</span><span class="dl-hud-t">t ${num(0, 2)} s</span></p>
+            <p class="dl-hud dl-hud-note"><span>${T('hudNote')}</span></p>
           </div>
           <div class="dl-transport">
-            <button class="dl-play" type="button" aria-label="Pausa"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="i-play" d="M4 2.5v11l9.5-5.5z"/></svg></button>
-            <input class="dl-scrub" type="range" min="0" max="1" step="0.01" value="0" aria-label="Tiempo del episodio" />
-            <output class="dl-time dl-mono">0,00 / 0,00 s</output>
-            <div class="dl-speeds" role="group" aria-label="Velocidad">
-              ${SPEEDS.map((s) => `<button type="button" data-speed="${s}" aria-pressed="${s === 1}">×${trim(num(s, 2))}</button>`).join('')}
+            <button class="dl-play" type="button" aria-label="${tl('pause')}"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="i-play" d="M4 2.5v11l9.5-5.5z"/></svg></button>
+            <input class="dl-scrub" type="range" min="0" max="1" step="0.01" value="0" ${A({ 'aria-label': 'scrubAria' })} />
+            <output class="dl-time dl-mono">${num(0, 2)} / ${num(0, 2)} s</output>
+            <div class="dl-speeds" role="group" ${A({ 'aria-label': 'speedAria' })}>
+              ${SPEEDS.map((s) => `<button type="button" data-speed="${s}" aria-pressed="${s === 1}">${langSpans(Object.fromEntries(LANGS.map((l) => [l, `×${trim(num(s, 2, l))}`])))}</button>`).join('')}
             </div>
           </div>
         </section>
 
         <div class="dl-side">
-          <section class="dl-win dl-matrix" aria-label="Mundos y episodios">
-            <div class="dl-bar"><span>prueba — ${worlds.length} mundos × ${Math.max(...worlds.map((w) => w.eps.length))} episodios</span><span>${completed}/${total} completos</span></div>
+          <section class="dl-win dl-matrix" ${A({ 'aria-label': 'matrixAria' })}>
+            <div class="dl-bar"><span>${T('matrixBar', { w: worlds.length, e: Math.max(...worlds.map((w) => w.eps.length)) })}</span><span>${T('completeN', { a: completed, b: total })}</span></div>
             <div class="dl-grid">
               ${worlds.map((world) => `
-              <div class="dl-row" role="group" aria-label="${esc(world.title)}">
-                <button class="dl-world" type="button" data-world="${world.row}" aria-label="${esc(world.title)}, ${trained.has(world.id) ? 'practicó aquí' : 'solo prueba'}: ver su primer episodio">
-                  <b>${esc(world.title)}</b>
-                  <span class="${trained.has(world.id) ? 'dl-tag on' : 'dl-tag'}">${trained.has(world.id) ? 'practicó' : 'prueba'}</span>
+              <div class="dl-row" role="group" aria-label="${esc(worldTitle(world))}">
+                <button class="dl-world" type="button" data-world="${world.row}" ${A({ 'aria-label': 'worldAria' }, { world: (l) => worldTitle(world, l), state: (l) => L(trained.has(world.id) ? 'practicedHere' : 'onlyTest', {}, l) })}>
+                  <b>${langSpans(Object.fromEntries(LANGS.map((l) => [l, esc(worldTitle(world, l))])))}</b>
+                  <span class="${trained.has(world.id) ? 'dl-tag on' : 'dl-tag'}">${T(trained.has(world.id) ? 'tagPracticed' : 'tagTest')}</span>
                 </button>
                 <div class="dl-cells">
                   ${world.eps.map((ep) => `
                   <button class="dl-cell" type="button" data-i="${ep.index}" aria-pressed="false"
-                    aria-label="${esc(world.title)}, episodio ${ep.k + 1}: ${ep.fell ? `terminó a ${num(ep.seconds, 2)} s` : 'llegó al final'} de ${num(duration, 2)} s"
+                    ${A({ 'aria-label': 'cellAria' }, { world: (l) => worldTitle(world, l), k: ep.k + 1, d: N(duration, 2), state: (l) => (ep.fell ? L('endedAt', { s: num(ep.seconds, 2, l) }, l) : L('reachedEnd', {}, l)) })}
                     style="--f:${Math.min(1, ep.seconds / duration)}">
-                    <span class="dl-cell-s">${num(ep.seconds, 1)}</span><span class="dl-cell-mark" aria-hidden="true">${ep.fell ? '' : '✓'}</span><i aria-hidden="true"></i>
+                    <span class="dl-cell-s">${langSpans(Object.fromEntries(LANGS.map((l) => [l, num(ep.seconds, 1, l)])))}</span><span class="dl-cell-mark" aria-hidden="true">${ep.fell ? '' : '✓'}</span><i aria-hidden="true"></i>
                   </button>`).join('')}
                 </div>
                 <div class="dl-sum">
                   <b>${esc(world.completed)}/${esc(world.episodes)}</b>
-                  <span>${num(world.seconds.mean, 2)} s</span>
+                  <span>${langSpans(Object.fromEntries(LANGS.map((l) => [l, num(world.seconds.mean, 2, l)])))} s</span>
                 </div>
               </div>`).join('')}
             </div>
-            <p class="dl-legend"><i class="dl-legend-bar" aria-hidden="true"></i>Segundos que siguió el clip, sobre ${num(duration, 2)} s · <b>✓</b> llegó al final · a la derecha: completos y media</p>
+            <p class="dl-legend"><i class="dl-legend-bar" aria-hidden="true"></i>${T('legend', { d: N(duration, 2) })}</p>
           </section>
 
           <section class="dl-win dl-episode" aria-live="polite">
-            <div class="dl-bar"><span class="dl-ep-title">episodio</span><span class="dl-ep-world"></span></div>
+            <div class="dl-bar"><span class="dl-ep-title">${T('episode')}</span><span class="dl-ep-world"></span></div>
             <div class="dl-ep-body">
               <dl class="dl-stats"></dl>
               <ul class="dl-params"></ul>
@@ -286,48 +326,48 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
           </section>
         </div>
 
-        <section class="dl-win dl-tele" aria-label="Telemetría del episodio">
+        <section class="dl-win dl-tele" ${A({ 'aria-label': 'teleAria' })}>
           <div class="dl-bar">
-            <span class="dl-tele-title">telemetría — ${LANES.length} canales · 25 Hz</span>
+            <span class="dl-tele-title">${T('teleBar', { n: LANES.length, hz: 25 })}</span>
             <span class="dl-tools">
-              <span class="dl-seg" role="group" aria-label="Eje del tiempo">
-                <button type="button" data-axis="episode" aria-pressed="true">Episodio</button>
-                <button type="button" data-axis="clip" aria-pressed="false">Clip · ${num(duration, 2)} s</button>
+              <span class="dl-seg" role="group" ${A({ 'aria-label': 'axisAria' })}>
+                <button type="button" data-axis="episode" aria-pressed="true">${T('axisEpisode')}</button>
+                <button type="button" data-axis="clip" aria-pressed="false">${T('axisClip', { d: N(duration, 2) })}</button>
               </span>
-              <button class="dl-table-toggle" type="button" aria-pressed="false">Tabla</button>
+              <button class="dl-table-toggle" type="button" aria-pressed="false">${T('table')}</button>
             </span>
           </div>
           <div class="dl-plot">
-            <svg class="dl-svg" role="img" aria-label="Fuerza de cada pie, error de pose, error y altura de la pelvis del episodio elegido"></svg>
+            <svg class="dl-svg" role="img" ${A({ 'aria-label': 'svgAria' })}></svg>
             <div class="dl-table" hidden></div>
-            <p class="dl-plot-msg">Cargando la repetición…</p>
+            <p class="dl-plot-msg">${T('loadingReplay')}</p>
           </div>
         </section>
       </div>
       </div>
 
       <div class="dl-more">
-        <section class="dl-win dl-train" aria-label="Entrenamiento">
-          <div class="dl-bar"><span>entrenamiento — checkpoints</span><span>${esc(policy.id ?? '')}</span></div>
+        <section class="dl-win dl-train" ${A({ 'aria-label': 'trainAria' })}>
+          <div class="dl-bar"><span>${T('trainBar')}</span><span>${esc(policy.id ?? '')}</span></div>
           <div class="dl-train-body"></div>
         </section>
-        <section class="dl-win dl-files" id="dl-files" aria-label="Descargas">
-          <div class="dl-bar"><span>archivos — lo que se llevan</span><span>${m.files?.length ?? 0} · ${bytes((m.files ?? []).reduce((sum, f) => sum + (f.bytes ?? 0), 0))}</span></div>
+        <section class="dl-win dl-files" id="dl-files" ${A({ 'aria-label': 'filesAria' })}>
+          <div class="dl-bar"><span>${T('filesBar')}</span><span>${m.files?.length ?? 0} · ${bytesT((m.files ?? []).reduce((sum, f) => sum + (f.bytes ?? 0), 0))}</span></div>
           <ul class="dl-file-list">
             ${(m.files ?? []).map((file) => {
               const href = url(file.name);
               return `
             <li>
               <span class="dl-file-name dl-mono">${esc(file.name)}</span>
-              <span class="dl-file-what">${esc(file.what)}</span>
-              <span class="dl-file-size dl-mono">${bytes(file.bytes ?? 0)}</span>
-              ${href ? `<a class="dl-get" href="${esc(href)}" download="${esc(file.name)}">Descargar</a>` : '<span class="dl-get off">No incluido</span>'}
+              <span class="dl-file-what">${langSpans({ es: esc(file.what), en: esc(FILE_WHAT_EN[file.name] ?? file.what) })}</span>
+              <span class="dl-file-size dl-mono">${bytesT(file.bytes ?? 0)}</span>
+              ${href ? `<a class="dl-get" href="${esc(href)}" download="${esc(file.name)}">${T('download')}</a>` : `<span class="dl-get off">${T('notIncluded')}</span>`}
             </li>`;
             }).join('')}
           </ul>
         </section>
-        <section class="dl-win dl-guide" aria-label="Qué es cada cosa">
-          <div class="dl-bar"><span>léeme — qué es cada cosa</span><span>formatos</span></div>
+        <section class="dl-win dl-guide" ${A({ 'aria-label': 'guideAria' })}>
+          <div class="dl-bar"><span>${T('guideBar')}</span><span>${T('formats')}</span></div>
           <div class="dl-guide-body">${guideHTML(m, episodes)}</div>
         </section>
       </div>
@@ -343,6 +383,12 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     target.addEventListener(type, fn, options);
     cleanups.push(() => target.removeEventListener(type, fn, options));
   };
+  const switcher = $('.dl-switcher');
+  if (switcher) {
+    listen(switcher, 'change', (e) => {
+      location.hash = `#/delivery/${encodeURIComponent(e.target.value)}`;
+    });
+  }
 
   let sel = order[0]?.index ?? 0;
   let t = 0; // s from the episode's start
@@ -390,7 +436,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     listen(target, 'blur', hideTip);
   }
 
-  const paramsRows = (values) => PARAMS.map((param) => [paramText(param, values[param.key]), param.name.toLowerCase()]);
+  const paramsRows = (values) => PARAMS.map((param) => [paramText(param, values[param.key]), tl(param.name).toLowerCase()]);
 
   // Half of an element (or of the window, for one taller than it) in the window counts as seen.
   function onScreen(el) {
@@ -414,8 +460,8 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     const ep = episodes[Number(cell.dataset.i)];
     cell.onclick = () => pick(ep.index);
     tipOn(cell, () => [
-      [`${worldOf(ep).title} · episodio ${ep.k + 1}`, ''],
-      [ep.fell ? `${num(ep.seconds, 2)} s` : 'Llegó al final', ep.fell ? `de ${num(duration, 2)} s: se cayó o se alejó del camino` : `del clip, ${num(duration, 2)} s`],
+      [tl('tipEpisode', { world: worldTitle(worldOf(ep)), k: ep.k + 1 }), ''],
+      [ep.fell ? `${num(ep.seconds, 2)} s` : tl('tipReached'), ep.fell ? tl('tipFellOf', { d: num(duration, 2) }) : tl('tipOfClip', { d: num(duration, 2) })],
       ...paramsRows(ep.params),
     ]);
   }
@@ -423,9 +469,9 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     const world = worlds[Number(label.dataset.world)];
     label.onclick = () => world.eps.length && pick(world.eps[0].index);
     tipOn(label, () => [
-      [world.title, trained.has(world.id) ? '· practicó aquí' : '· solo prueba, no practicó aquí'],
-      [`${world.completed}/${world.episodes}`, `completos · media ${num(world.seconds.mean, 2)} s (${num(world.seconds.min, 2)} a ${num(world.seconds.max, 2)})`],
-      ...PARAMS.map((param) => [rangeText(param, world.params[param.key]), `${param.name.toLowerCase()}, sorteado por episodio`]),
+      [worldTitle(world), tl(trained.has(world.id) ? 'tipPracticedHere' : 'tipOnlyTest')],
+      [`${world.completed}/${world.episodes}`, tl('tipComplete', { m: num(world.seconds.mean, 2), a: num(world.seconds.min, 2), b: num(world.seconds.max, 2) })],
+      ...PARAMS.map((param) => [rangeText(param, world.params[param.key]), tl('tipDrawn', { param: tl(param.name).toLowerCase() })]),
     ]);
   }
 
@@ -450,18 +496,18 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   function renderEpisode() {
     const ep = episodes[sel];
     const world = worldOf(ep);
-    $('.dl-ep-title').textContent = `ep ${pad2(ep.index + 1)} / ${total} · ${world.title.toLowerCase()} #${ep.k + 1}`;
-    $('.dl-ep-world').textContent = trained.has(world.id) ? 'practicó aquí' : 'no practicó aquí';
-    $('.dl-hud-ep').textContent = `EP ${pad2(ep.index + 1)}/${total} · ${world.title}`;
-    $('.dl-hud-state').textContent = ep.fell ? `terminó a ${num(ep.seconds, 2)} s` : 'llegó al final';
+    $('.dl-ep-title').textContent = tl('epTitle', { i: pad2(ep.index + 1), n: total, world: worldTitle(world).toLowerCase(), k: ep.k + 1 });
+    $('.dl-ep-world').textContent = tl(trained.has(world.id) ? 'practicedHere' : 'notPracticedHere');
+    $('.dl-hud-ep').textContent = tl('hudEp', { i: pad2(ep.index + 1), n: total, world: worldTitle(world) });
+    $('.dl-hud-state').textContent = ep.fell ? tl('endedAt', { s: num(ep.seconds, 2) }) : tl('reachedEnd');
     $('.dl-hud-state').classList.toggle('done', !ep.fell);
     const degrees = (ep.pose_error * 180) / Math.PI;
     const peak = sharedPeak(ep, world);
     $('.dl-stats').innerHTML = `
-      <div><dt>Duró</dt><dd><b>${num(ep.seconds, 2)}</b> s <small>de ${num(duration, 2)}</small></dd></div>
-      <div><dt>Error de pose</dt><dd><b>${num(ep.pose_error, 3)}</b> rad <small>${num(degrees, 1)}° media</small></dd></div>
-      <div><dt>Error de pelvis 3D</dt><dd><b>${num(ep.pelvis_error, 2)}</b> m <small>máximo, en 3D</small></dd></div>
-      <div><dt>Pico de fuerza</dt><dd><b>${int.format(Math.round(ep.foot_force_peak))}</b> N <small>${peak ? `un pie · igual en ${world.eps.length}` : 'un pie'}</small></dd></div>`;
+      <div><dt>${tl('lasted')}</dt><dd><b>${num(ep.seconds, 2)}</b> s <small>${tl('ofD', { d: num(duration, 2) })}</small></dd></div>
+      <div><dt>${tl('poseError')}</dt><dd><b>${num(ep.pose_error, 3)}</b> rad <small>${tl('meanDeg', { d: num(degrees, 1) })}</small></dd></div>
+      <div><dt>${tl('pelvisError')}</dt><dd><b>${num(ep.pelvis_error, 2)}</b> m <small>${tl('max3d')}</small></dd></div>
+      <div><dt>${tl('forcePeak')}</dt><dd><b>${int.format(Math.round(ep.foot_force_peak))}</b> N <small>${peak ? tl('oneFootSame', { n: world.eps.length }) : tl('oneFoot')}</small></dd></div>`;
     $('.dl-ep-peak').textContent = peak;
     $('.dl-params').innerHTML = PARAMS.map((param) => {
       const [lo, hi] = spans[param.key];
@@ -469,7 +515,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       const at = (v) => (hi > lo ? (100 * (v - lo)) / (hi - lo) : 50);
       return `
         <li>
-          <span class="dl-param-name">${param.name}</span>
+          <span class="dl-param-name">${tl(param.name)}</span>
           <span class="dl-range" aria-hidden="true"><i class="dl-band" style="left:${at(wlo)}%;width:${Math.max(0.6, at(whi) - at(wlo))}%"></i><b style="left:${at(ep.params[param.key])}%"></b></span>
           <span class="dl-param-value dl-mono">${esc(paramText(param, ep.params[param.key]))}</span>
           <span class="dl-param-span dl-mono">${esc(rangeText(param, world.params[param.key]))}</span>
@@ -477,10 +523,9 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     }).join('');
     // The world file's own reason for its ranges (physics/worlds/<id>.json), the same the training read.
     const why = WORLDS.find((w) => w.id === world.id)?.why;
-    $('.dl-ep-why').textContent = why ? `${world.title}: ${why}` : '';
-    $('.dl-ep-end').textContent = ep.fell
-      ? `Terminó a ${num(ep.seconds, 2)} s: se cayó (pelvis bajo 0,5 m o torso inclinado más de 60°) o su pelvis se alejó más de 0,6 m del camino. La franja es el rango del mundo; la marca, el valor sorteado.`
-      : `Siguió el clip hasta el final, ${num(duration, 2)} s. La franja es el rango del mundo; la marca, el valor sorteado.`;
+    const whyText = lang() === 'es' ? why : (WORLD_WHY_EN[world.id] ?? why);
+    $('.dl-ep-why').textContent = whyText ? `${worldTitle(world)}: ${whyText}` : '';
+    $('.dl-ep-end').textContent = ep.fell ? tl('endFell', { s: num(ep.seconds, 2) }) : tl('endDone', { d: num(duration, 2) });
     fadeEpisode();
   }
 
@@ -492,7 +537,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     if (n < 2 || !world.eps.every((other) => other.foot_force_peak === ep.foot_force_peak)) return '';
     const value = `${int.format(Math.round(ep.foot_force_peak))} N`;
     const onlyPushes = PARAMS.every(({ key }) => key === 'push_n' || world.params[key]?.[0] === world.params[key]?.[1]);
-    if (!onlyPushes) return `Pico de fuerza: los ${n} episodios de este mundo marcan el mismo, ${value}.`;
+    if (!onlyPushes) return tl('peakSame', { n, value });
     // When the peak happened, from the replay (once it is in, and if its 25 Hz rows kept the peak).
     const s = replay?.series[ep.index];
     let at = null;
@@ -501,8 +546,8 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       for (let r = 0; r < s.n; r++) if (Math.max(s.left[r], s.right[r]) > Math.max(s.left[best], s.right[best])) best = r;
       if (Math.abs(Math.max(s.left[best], s.right[best]) - ep.foot_force_peak) < 0.5) at = s.times[best];
     }
-    if (at !== null && at >= FIRST_PUSH_S) return `Pico de fuerza: los ${n} episodios de este mundo marcan el mismo, ${value}.`;
-    return `Pico de fuerza: los ${n} episodios de este mundo marcan el mismo, ${value}${at !== null ? ` a ${num(at, 2)} s, al pisar` : ''}. Aquí solo cambia el empujón, y el primero llega a los ${FIRST_PUSH_S} s o después: hasta ahí los ${n} son idénticos.`;
+    if (at !== null && at >= FIRST_PUSH_S) return tl('peakSame', { n, value });
+    return tl('peakPushes', { n, value, at: at !== null ? tl('peakAt', { s: num(at, 2) }) : '', first: FIRST_PUSH_S });
   }
 
   // A card taller than its window (a short screen, 1280 x 720) scrolls inside itself; while there is
@@ -598,18 +643,18 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
           height: niceCeil(top('height')),
         };
         $('.dl-plot-msg').hidden = true;
-        $('.dl-tele-title').textContent = `telemetría — ${LANES.length} canales · ${hz} Hz`;
-        $('.dl-sim-info').textContent = `dataset ${DATASET_HZ} → ${hz} Hz`;
+        $('.dl-tele-title').innerHTML = T('teleBar', { n: LANES.length, hz });
+        $('.dl-sim-info').innerHTML = T('simInfo', { a: DATASET_HZ, b: hz });
         renderEpisode(); // the shared force peak can now say when it happened
         renderTelemetry();
       })
       .catch((error) => {
         if (gone || signal.aborted) return;
         console.error(error);
-        $('.dl-plot-msg').textContent = 'No se pudo cargar la repetición de los episodios.';
+        $('.dl-plot-msg').innerHTML = T('replayFailed');
       });
   } else {
-    $('.dl-plot-msg').textContent = 'Esta entrega no trae la repetición de los episodios.';
+    $('.dl-plot-msg').innerHTML = T('noReplay');
   }
 
   // ---- Telemetry ----
@@ -664,13 +709,13 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       // The lane's top value, as a y axis would put it: at the plot's left edge, in the label column.
       if (!narrow) svgEl('text', { x: x0 - 8, y: top + 8, class: 'dl-tick', 'text-anchor': 'end' }, g).textContent = `${trim(num(max, 2))} ${lane.unit}`;
       const name = svgEl('text', { x: 0, y: top + 10, class: 'dl-lane-name' }, g);
-      name.textContent = narrow ? lane.short : lane.name;
+      name.textContent = tl(narrow ? lane.short : lane.name);
       const value = svgEl('text', { x: 0, y: Math.min(base - 2, top + 30), class: 'dl-lane-value' }, g);
       if (lane.limit !== undefined) {
         const ly = y(lane.limit);
         svgEl('line', { x1: x0, x2: x1, y1: ly, y2: ly, class: 'dl-limit' }, g);
         // At the left, where every episode starts far from its limit, so the trace never covers it.
-        svgEl('text', { x: x0 + 4, y: ly - 3, class: 'dl-limit-label' }, g).textContent = narrow ? lane.limitShort : lane.limitLabel;
+        svgEl('text', { x: x0 + 4, y: ly - 3, class: 'dl-limit-label' }, g).textContent = tl(narrow ? lane.limitShort : lane.limitLabel);
       }
       const values = s[lane.key];
       let line = '';
@@ -687,7 +732,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       const ex = x(ep.seconds);
       svgEl('rect', { x: ex, y: padT, width: Math.max(0, x1 - ex), height: bottom - padT, class: 'dl-nodata' }, svg);
       svgEl('line', { x1: ex, x2: ex, y1: padT, y2: bottom, class: 'dl-end' }, svg);
-      if (x1 - ex > 120) svgEl('text', { x: ex + 8, y: padT + 12, class: 'dl-end-label' }, svg).textContent = `sin datos: terminó a ${num(ep.seconds, 2)} s`;
+      if (x1 - ex > 120) svgEl('text', { x: ex + 8, y: padT + 12, class: 'dl-end-label' }, svg).textContent = tl('noData', { s: num(ep.seconds, 2) });
     }
 
     // Time axis: about one tick per 70 px, at a clean step.
@@ -735,8 +780,8 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       const box = svg.getBoundingClientRect();
       const at = { left: box.left + plot.x(inData ? rowT : time) - 1, width: 2, top: box.top + 8, bottom: box.top + 8 };
       showTip(hit, inData
-        ? [[`${num(rowT, 2)} s`, ''], ...LANES.map((lane) => [`${num(s[lane.key][r], lane.digits)} ${lane.unit}`, lane.name.toLowerCase()])]
-        : [[`${num(time, 2)} s`, `sin datos: el episodio terminó a ${num(episodes[sel].seconds, 2)} s`]], at);
+        ? [[`${num(rowT, 2)} s`, ''], ...LANES.map((lane) => [`${num(s[lane.key][r], lane.digits)} ${lane.unit}`, tl(lane.name).toLowerCase()])]
+        : [[`${num(time, 2)} s`, tl('noDataTip', { s: num(episodes[sel].seconds, 2) })]], at);
     };
     const leave = () => {
       plot?.cross.setAttribute('visibility', 'hidden');
@@ -755,12 +800,12 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     const s = series();
     const box = $('.dl-table');
     if (!s) return void (box.textContent = '');
-    const head = `<tr><th>t (s)</th>${LANES.map((lane) => `<th>${lane.name} (${lane.unit})</th>`).join('')}</tr>`;
+    const head = `<tr><th>t (s)</th>${LANES.map((lane) => `<th>${tl(lane.name)} (${lane.unit})</th>`).join('')}</tr>`;
     let rows = '';
     for (let r = 0; r < s.n; r++) {
       rows += `<tr><td>${num(s.times[r], 2)}</td>${LANES.map((lane) => `<td>${num(s[lane.key][r], lane.digits)}</td>`).join('')}</tr>`;
     }
-    box.innerHTML = `<table><caption>Episodio ${sel + 1}, una fila cada ${num(1000 / replay.hz, 0)} ms</caption><thead>${head}</thead><tbody>${rows}</tbody></table>`;
+    box.innerHTML = `<table><caption>${tl('tableCaption', { i: sel + 1, ms: num(1000 / replay.hz, 0) })}</caption><thead>${head}</thead><tbody>${rows}</tbody></table>`;
   }
 
   // ---- Playback: the clock, the playhead and the robot ----
@@ -802,7 +847,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   function setPlaying(next) {
     playing = next;
     $('.dl-play').classList.toggle('paused', !playing);
-    $('.dl-play').setAttribute('aria-label', playing ? 'Pausa' : 'Reproducir');
+    $('.dl-play').setAttribute('aria-label', tl(playing ? 'pause' : 'play'));
   }
   setPlaying(playing);
   $('.dl-play').onclick = () => setPlaying(!playing);
@@ -862,9 +907,9 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   if (robotView()) pane.classList.add('ready');
   const stopProgress = onRobotProgress(({ done, total, compiling, policy: loadingPolicy }) => {
     $('.dl-boot-fill').style.width = `${(100 * done) / total}%`;
-    $('.dl-boot-text').textContent = loadingPolicy
-      ? 'Terminando de preparar al robot…'
-      : compiling ? 'Armando al robot en MuJoCo…' : `Descargando MuJoCo y el G1 · ${Math.round((100 * done) / total)} %`;
+    $('.dl-boot-text').innerHTML = loadingPolicy
+      ? T('finishing')
+      : compiling ? T('compiling') : T('downloadingMujoco', { p: Math.round((100 * done) / total) });
   });
   host.ready
     .then((loaded) => {
@@ -879,7 +924,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     })
     .catch((error) => {
       console.error(error);
-      $('.dl-boot-text').textContent = 'No se pudo cargar el robot. Recarga la página para intentar de nuevo.';
+      $('.dl-boot-text').innerHTML = T('robotFailed');
     });
 
   // Puts the robot in the selected episode's world. Only the stones change the floor (and rebuild
@@ -897,7 +942,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     if (!world) return; // a world this build does not know: the flat floor stands in
     // A rebuild shorter than 150 ms (the flat floor) says nothing, instead of flashing the note.
     noteTimer = setTimeout(() => {
-      if (!gone) $('.dl-hud-state').textContent = `cargando ${world.title.toLowerCase()}…`;
+      if (!gone) $('.dl-hud-state').textContent = tl('loadingWorld', { world: worldTitle(world).toLowerCase() });
     }, 150);
     worldBusy = view.setWorld(world)
       .catch((error) => console.error(error))
@@ -976,17 +1021,36 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   listen(window, 'scroll', hideTip, { passive: true, capture: true });
 
   renderTraining(root.querySelector('.dl-train-body'), m, worlds, tipOn);
+  let policyMeta = null;
   const policyUrl = url(policy.json);
   if (policyUrl) {
     fetch(policyUrl, { signal })
       .then((response) => (response.ok ? response.json() : null))
-      .then((meta) => meta && !gone && ($('.dl-guide-body').innerHTML = guideHTML(m, episodes, meta)))
+      .then((meta) => {
+        if (!meta || gone) return;
+        policyMeta = meta;
+        $('.dl-guide-body').innerHTML = guideHTML(m, episodes, meta);
+      })
       .catch(() => {}); // the guide keeps the sizes by name
   }
   select(sel);
 
+  // A language switch: the spans flip on their own (src/i18n.js); what was drawn in one language
+  // (the episode card, the chart, the HUD, the ladder, the guide's numbers) is drawn again. The
+  // replay keeps playing where it was.
+  const stopLang = onLang(() => {
+    hideTip();
+    renderEpisode();
+    renderTelemetry();
+    updatePlayhead();
+    setPlaying(playing);
+    renderTraining(root.querySelector('.dl-train-body'), m, worlds, tipOn);
+    $('.dl-guide-body').innerHTML = guideHTML(m, episodes, policyMeta);
+  });
+
   return () => {
     gone = true;
+    stopLang();
     clearTimeout(noteTimer);
     cancelAnimationFrame(frameId);
     cancelAnimationFrame(resizeFrame);
@@ -1017,13 +1081,13 @@ function renderTraining(box, m, worlds, tipOn) {
   const plano = worlds.find((world) => world.id === 'plano');
   const facts = `
     <dl class="dl-train-facts">
-      <div><dt>Política final</dt><dd><b>${policy.steps ? num(policy.steps / 1e6, 1) : '—'}</b> M pasos</dd></div>
-      <div><dt>Sigue el clip</dt><dd><b>${policy.followed_s != null ? num(policy.followed_s, 2) : '—'}</b> s de ${num(duration, 2)}</dd></div>
-      <div><dt>Practicó en</dt><dd>${esc(worlds.filter((w) => (policy.trained_worlds ?? []).includes(w.id)).map((w) => w.title).join(', ') || '—')}</dd></div>
+      <div><dt>${tl('finalPolicy')}</dt><dd><b>${policy.steps ? num(policy.steps / 1e6, 1) : '—'}</b> ${tl('mStepsUnit')}</dd></div>
+      <div><dt>${tl('follows')}</dt><dd><b>${policy.followed_s != null ? num(policy.followed_s, 2) : '—'}</b> ${tl('sOf', { d: num(duration, 2) })}</dd></div>
+      <div><dt>${tl('practicedIn')}</dt><dd>${esc(worlds.filter((w) => (policy.trained_worlds ?? []).includes(w.id)).map((w) => worldTitle(w)).join(', ') || '—')}</dd></div>
     </dl>
-    <p class="dl-train-note">"Sigue el clip" se mide en el piso plano, sin empujones ni ruido (training/evaluate_walk.py): los segundos desde el principio sin caerse ni alejarse 0,6 m del camino.${plano ? ` La prueba de arriba sí empuja al robot, así que mide otra cosa: en el plano duró ${num(plano.seconds.mean, 2)} s de media.` : ''}</p>`;
+    <p class="dl-train-note">${tl('trainNote')}${plano ? tl('trainNotePlano', { s: num(plano.seconds.mean, 2) }) : ''}</p>`;
   if (!ladder.length) {
-    box.innerHTML = `${facts}<p class="dl-train-empty">Esta entrega no trae la escalera: los checkpoints intermedios de ${esc(policy.id ?? 'la política')} no quedaron guardados con su medida, así que solo se entrega la política final.</p>`;
+    box.innerHTML = `${facts}<p class="dl-train-empty">${tl('noLadder', { id: policy.id ? esc(policy.id) : tl('thePolicy') })}</p>`;
     return;
   }
   // The final policy is the ladder's last step, if the list does not already end with it.
@@ -1042,22 +1106,22 @@ function renderTraining(box, m, worlds, tipOn) {
   const line = ladder.map((c, i) => `${i ? 'L' : 'M'}${x(c.steps).toFixed(1)},${y(c.followed_s).toFixed(1)}`).join('');
   box.innerHTML = `
     <figure class="dl-ladder">
-      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Segundos del clip que sigue cada checkpoint, contra sus pasos de entrenamiento">
+      <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${tl('ladderAria')}">
         ${yTicks.map((v) => `<line class="dl-gl" x1="${padding.l}" x2="${W - padding.r}" y1="${y(v)}" y2="${y(v)}"/><text class="dl-tick" x="${padding.l - 6}" y="${y(v) + 3}" text-anchor="end">${trim(num(v, 1))} s</text>`).join('')}
         <line class="dl-limit" x1="${padding.l}" x2="${W - padding.r}" y1="${y(duration)}" y2="${y(duration)}"/>
-        <text class="dl-limit-label" x="${W - padding.r}" y="${y(duration) - 4}" text-anchor="end">clip completo · ${num(duration, 2)} s</text>
+        <text class="dl-limit-label" x="${W - padding.r}" y="${y(duration) - 4}" text-anchor="end">${tl('fullClip', { d: num(duration, 2) })}</text>
         ${xTicks.map((v) => `<text class="dl-tick" x="${x(v * 1e6)}" y="${H - 6}" text-anchor="middle">${num(v, v % 1 ? 1 : 0)} M</text>`).join('')}
         <path class="dl-line" d="${line}"/>
         ${ladder.map((c, i) => `<circle class="dl-dot${c.final ? ' final' : ''}" data-i="${i}" cx="${x(c.steps)}" cy="${y(c.followed_s)}" r="${c.final ? 5 : 4}"/>`).join('')}
         ${ladder.map((c, i) => `<circle class="dl-dot-hit" data-i="${i}" cx="${x(c.steps)}" cy="${y(c.followed_s)}" r="12" tabindex="0"/>`).join('')}
         <text class="dl-end-label" x="${x(ladder.at(-1).steps) - 8}" y="${y(ladder.at(-1).followed_s) - 10}" text-anchor="end">${num(ladder.at(-1).followed_s, 2)} s</text>
       </svg>
-      <figcaption>Segundos del clip que sigue cada checkpoint (eje vertical) según sus pasos de práctica (horizontal)</figcaption>
+      <figcaption>${tl('ladderCaption')}</figcaption>
     </figure>
     ${facts}`;
   for (const dot of box.querySelectorAll('.dl-dot-hit')) {
     const c = ladder[Number(dot.dataset.i)];
-    tipOn(dot, () => [[`${num(c.followed_s, 2)} s`, `de ${num(duration, 2)} s`], [`${num(c.steps / 1e6, 1)} M`, c.final ? 'pasos · la política que se entrega' : 'pasos de práctica']]);
+    tipOn(dot, () => [[`${num(c.followed_s, 2)} s`, tl('tipOfS', { d: num(duration, 2) })], [`${num(c.steps / 1e6, 1)} M`, tl(c.final ? 'tipStepsFinal' : 'tipSteps')]]);
   }
 }
 
@@ -1072,20 +1136,26 @@ function guideHTML(m, episodes, meta = null) {
   const rows = Math.round(episodes.reduce((sum, ep) => sum + ep.seconds, 0) * DATASET_HZ);
   const worlds = m.worlds?.length ?? 0;
   const items = [
-    ['policy.onnx', 'La política, en ONNX (opset 17)', `Entrada <code>obs</code>: float32 [n, ${esc(obs)}], lo que el robot siente${mimic ? ' y la referencia que sigue' : ''}. Salida <code>ctrl</code>: float32 [n, ${esc(nu)}], los ángulos objetivo de los motores del G1 (rad)${mimic ? ', ya con la pose de referencia sumada: se escriben tal cual en <code>data.ctrl</code>' : ''}. Una decisión cada 20 ms${meta?.mjcf ? `, sobre el modelo <code>${esc(meta.mjcf)}</code> de MuJoCo` : ''}.`],
-    ['policy.json', 'La ficha de la política', 'El clip que imita, sus pasos de práctica, los mundos en que practicó, cuánto del clip sigue y el modelo de MuJoCo que necesita (<code>mjcf</code>, <code>obs_dim</code>, <code>nu</code>, <code>lookahead_s</code>).'],
-    ['dataset.zip', 'Datos para entrenar robots', `<code>meta.json</code> (cada episodio: mundo, parámetros sorteados, si terminó antes y cuánto duró) y <code>rollouts.npz</code> con ${int.format(rows)} filas a ${DATASET_HZ} Hz de ${episodes.length} episodios en ${worlds} mundos: <code>episode</code> [N], <code>t</code> [N], <code>qpos</code> [N, 36], <code>qvel</code> [N, 35], <code>ctrl</code> [N, 29], <code>foot_force</code> [N, 2, 3] (N, izquierdo y derecho), <code>pose_error</code> [N] (rad) y <code>pelvis_error</code> [N] (m).`],
-    ['motion.json', 'El movimiento que imita (RobotMotion)', 'La persona pasada al cuerpo del G1: <code>fps</code> y <code>qpos</code> [cuadros, 36]: la pelvis (x, y, z en m, z arriba), su cuaternión (w, x, y, z) y los 29 ángulos en rad, en el orden de <code>g1_mjx.xml</code>.'],
-    ['poseclip.json', 'El esqueleto de la persona (PoseClip)', 'Los 33 puntos de MediaPipe Pose por cuadro, <code>[x, y, z, visibilidad]</code> en metros, y arriba, con el origen en las caderas del primer cuadro.'],
-    ['scene.json', 'El lugar del video', 'Los objetos sobre el piso detectados en el primer cuadro: caja o cilindro, tamaño y posición en metros, giro en radianes.'],
+    ['policy.onnx', tl('onnxWhat'), tl('onnxHow', {
+      obs: esc(obs),
+      nu: esc(nu),
+      mimicIn: mimic ? tl('onnxMimicIn') : '',
+      mimicOut: mimic ? tl('onnxMimicOut') : '',
+      mjcf: meta?.mjcf ? tl('onnxMjcf', { mjcf: esc(meta.mjcf) }) : '',
+    })],
+    ['policy.json', tl('policyJsonWhat'), tl('policyJsonHow')],
+    ['dataset.zip', tl('datasetWhat'), tl('datasetHow', { rows: int.format(rows), hz: DATASET_HZ, eps: episodes.length, worlds })],
+    ['motion.json', tl('motionWhat'), tl('motionHow')],
+    ['poseclip.json', tl('poseclipWhat'), tl('poseclipHow')],
+    ['scene.json', tl('sceneWhat'), tl('sceneHow')],
   ].filter(([name]) => names.has(name));
   const code = `import numpy as np, onnxruntime as ort
 policy = ort.InferenceSession("policy.onnx")
-# obs: lo que arma MimicEnv.observe() en training/imitate.py
+${tl('codeObs')}
 ctrl = policy.run(["ctrl"], {"obs": obs[None].astype(np.float32)})[0][0]
 
-data = np.load("rollouts.npz")   # dentro de dataset.zip
-first = data["qpos"][data["episode"] == 0]   # [filas, 36]`;
+data = np.load("rollouts.npz")   ${tl('codeInside')}
+first = data["qpos"][data["episode"] == 0]   ${tl('codeRows')}`;
   return `
     <dl class="dl-formats">${items.map(([name, what, how]) => `<div><dt><span class="dl-mono">${name}</span> ${what}</dt><dd>${how}</dd></div>`).join('')}</dl>
     ${names.has('policy.onnx') && names.has('dataset.zip') ? `<pre class="dl-code"><code>${esc(code)}</code></pre>` : ''}`;

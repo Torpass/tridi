@@ -1,0 +1,41 @@
+<mujoco model="luigi_lab3 scene">
+  <include file="luigi.xml"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="140" elevation="-22"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.3 0.5 0.7" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3"
+      markrgb="0.8 0.8 0.8" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2"/>
+  </asset>
+
+  <worldbody>
+    <light pos="2 0 2.5" dir="-0.8 0 -0.6"/>
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" contype="1" conaffinity="1"/>
+
+    <!-- Solid physical test arena (3.4 m x 3.4 m) + real obstacles (boxes, sofa base, furniture legs)
+         so the simulated HC-SR04 ultrasonic and APDS-9960 IR radar detect them and the robot dodges in closed loop -->
+    <geom name="arena_wall_n" type="box" pos="1.75 0 0.14" size="0.06 1.75 0.14" group="2" contype="1" conaffinity="1" rgba="0.26 0.28 0.32 1"/>
+    <geom name="arena_wall_s" type="box" pos="-1.75 0 0.14" size="0.06 1.75 0.14" group="2" contype="1" conaffinity="1" rgba="0.26 0.28 0.32 1"/>
+    <geom name="arena_wall_e" type="box" pos="0 1.75 0.14" size="1.75 0.06 0.14" group="2" contype="1" conaffinity="1" rgba="0.26 0.28 0.32 1"/>
+    <geom name="arena_wall_w" type="box" pos="0 -1.75 0.14" size="1.75 0.06 0.14" group="2" contype="1" conaffinity="1" rgba="0.26 0.28 0.32 1"/>
+
+    <!-- Interior physical obstacles (representing the living-room test: shoebox, sofa edge, table legs, cable box) -->
+    <geom name="obs_box_front" type="box" pos="0.95 0.12 0.11" size="0.18 0.22 0.11" group="2" contype="1" conaffinity="1" rgba="0.76 0.54 0.32 1"/>
+    <geom name="obs_sofa_block" type="box" pos="-0.85 -0.78 0.18" size="0.48 0.26 0.18" group="2" contype="1" conaffinity="1" rgba="0.34 0.38 0.46 1"/>
+    <geom name="obs_pillar_left" type="cylinder" pos="0.35 0.88 0.16" size="0.14 0.16" group="2" contype="1" conaffinity="1" rgba="0.82 0.38 0.24 1"/>
+    <geom name="obs_pillar_right" type="cylinder" pos="0.48 -0.82 0.16" size="0.15 0.16" group="2" contype="1" conaffinity="1" rgba="0.24 0.62 0.56 1"/>
+    <geom name="obs_crate_back" type="box" pos="-0.92 0.68 0.12" size="0.22 0.22 0.12" group="2" contype="1" conaffinity="1" rgba="0.68 0.58 0.28 1"/>
+  </worldbody>
+
+  <keyframe>
+    <key name="home" qpos="0 0 0.0875 1 0 0 0 0 0" ctrl="0 0"/>
+    <key name="stand" qpos="0 0 0.0875 1 0 0 0 0 0" ctrl="0 0"/>
+  </keyframe>
+</mujoco>

@@ -10,6 +10,11 @@
     { "label": "mesa", "kind": "box", "size": [0.9, 1.5, 0.75], "pos": [2.8, 2.0], "yaw": 0 },
     { "label": "silla", "kind": "box", "size": [0.45, 0.45, 0.9], "pos": [2.1, 1.6], "yaw": 0.1, "movable": true, "mass": 4 },
     { "label": "silla", "kind": "box", "size": [0.45, 0.45, 0.9], "pos": [2.1, 2.5], "yaw": -0.15, "movable": true, "mass": 4 },
-    { "label": "tacho", "kind": "cylinder", "size": [0.35, 0.35, 0.6], "pos": [-1.6, -0.8], "yaw": 0, "movable": true, "mass": 3 }
+    { "label": "tacho", "kind": "cylinder", "size": [0.35, 0.35, 0.6], "pos": [-1.6, -0.8], "yaw": 0, "movable": true, "mass": 3 },
+    { "label": "taza", "kind": "cylinder", "size": [0.11, 0.11, 0.14], "pos": [0.32, -0.32], "yaw": 0, "movable": true, "mass": 0.35, "friction": 0.85 },
+    { "label": "agua", "kind": "sphere", "size": [0.036, 0.036, 0.036], "pos": [0.28, -0.46], "yaw": 0, "movable": true, "mass": 0.025, "friction": 0.05 },
+    { "label": "agua", "kind": "sphere", "size": [0.036, 0.036, 0.036], "pos": [0.33, -0.46], "yaw": 0, "movable": true, "mass": 0.025, "friction": 0.05 },
+    { "label": "agua", "kind": "sphere", "size": [0.036, 0.036, 0.036], "pos": [0.38, -0.46], "yaw": 0, "movable": true, "mass": 0.025, "friction": 0.05 },
+    { "label": "agua", "kind": "sphere", "size": [0.036, 0.036, 0.036], "pos": [0.33, -0.51], "yaw": 0, "movable": true, "mass": 0.025, "friction": 0.05 }
   ]
 }

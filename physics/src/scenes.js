@@ -26,12 +26,33 @@ const COLORS = {
   banco: '0.45 0.33 0.22 1',
   poste: '0.28 0.30 0.33 1',
   maceta: '0.55 0.38 0.30 1',
+  taza: '0.92 0.38 0.24 1',
+  agua: '0.22 0.62 0.95 0.90',
 };
 const GRAY = '0.6 0.6 0.62 1';
 // A loose object with no mass given weighs this much: a full cardboard box or a light chair.
 const DEFAULT_MASS_KG = 5;
 // Contacts with places: rubber-ish soles on wood, tile or concrete (the floor's own pairs use 1).
 const FRICTION = 1;
+
+/**
+ * Lightweight scene with a graspable vessel (`taza`, 0.35 kg) and 6 dynamic liquid particle spheres
+ * (`agua`, 0.025 kg each, low fluid friction 0.05) used when the user triggers object grasping on
+ * an otherwise empty floor.
+ */
+export const HELD_OBJECT_SCENE = {
+  id: 'interaccion',
+  title: 'Objeto y líquido',
+  objects: [
+    { label: 'taza', kind: 'cylinder', size: [0.11, 0.11, 0.14], pos: [0.32, -0.22], yaw: 0, movable: true, mass: 0.35, friction: 0.85 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.30, -0.36], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.35, -0.36], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.40, -0.36], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.30, -0.41], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.35, -0.41], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+    { label: 'agua', kind: 'sphere', size: [0.036, 0.036, 0.036], pos: [0.40, -0.41], yaw: 0, movable: true, mass: 0.025, friction: 0.05 },
+  ],
+};
 
 const f = (v) => +v.toFixed(4);
 
@@ -43,9 +64,9 @@ export function collisionGeoms(robotXml) {
 /**
  * @param baseXml   the scene to add the place to (scene_mjx.xml, or a world's version of it)
  * @param robotXml  the robot file it includes, for the names of its collision geoms
- * @param place     { id, objects: [{ label, kind: "box" | "cylinder", size: [x, y, z] m (a
- *   cylinder's x is its diameter), pos: [x, y] m (the object rests on the floor), yaw rad,
- *   movable?: bool, mass?: kg }] }
+ * @param place     { id, objects: [{ label, kind: "box" | "cylinder" | "sphere", size: [x, y, z] m (a
+ *   cylinder's or sphere's x is its diameter), pos: [x, y] m (the object rests on the floor), yaw rad,
+ *   movable?: bool, mass?: kg, friction?: number }] }
  * @returns the MJCF of the base scene with the place in it
  */
 export function placeXml(baseXml, robotXml, place) {
@@ -56,18 +77,26 @@ export function placeXml(baseXml, robotXml, place) {
   place.objects.forEach((o, i) => {
     const name = `place_${i}_${o.label}`.replace(/[^A-Za-z0-9_]/g, '_');
     const [sx, sy, sz] = o.size;
-    const shape = o.kind === 'cylinder' ? `type="cylinder" size="${f(sx / 2)} ${f(sz / 2)}"` : `type="box" size="${f(sx / 2)} ${f(sy / 2)} ${f(sz / 2)}"`;
+    const shape =
+      o.kind === 'sphere'
+        ? `type="sphere" size="${f(sx / 2)}"`
+        : o.kind === 'cylinder'
+          ? `type="cylinder" size="${f(sx / 2)} ${f(sz / 2)}"`
+          : `type="box" size="${f(sx / 2)} ${f(sy / 2)} ${f(sz / 2)}"`;
     const yaw = o.yaw ?? 0;
+    const mu = f(o.friction ?? FRICTION);
     const at = `pos="${f(o.pos[0])} ${f(o.pos[1])} ${f(sz / 2)}" quat="${f(Math.cos(yaw / 2))} 0 0 ${f(Math.sin(yaw / 2))}"`;
-    const geom = `<geom name="${name}" ${shape} rgba="${COLORS[o.label] ?? GRAY}" contype="1" conaffinity="1" condim="3" friction="${FRICTION}"`;
+    const geom = `<geom name="${name}" ${shape} rgba="${COLORS[o.label] ?? GRAY}" contype="1" conaffinity="1" condim="3" friction="${mu}"`;
     bodies.push(o.movable
       ? `    <body name="${name}_body" ${at}><freejoint/>${geom} mass="${o.mass ?? DEFAULT_MASS_KG}"/></body>`
       : `    ${geom} ${at}/>`);
-    for (const r of robot) pairs.push(`    <pair geom1="${r}" geom2="${name}" condim="3" friction="${FRICTION} ${FRICTION}"/>`);
-    if (o.movable) for (const g of ground) pairs.push(`    <pair geom1="${name}" geom2="${g}" condim="3" friction="${FRICTION} ${FRICTION}"/>`);
+    for (const r of robot) pairs.push(`    <pair geom1="${r}" geom2="${name}" condim="3" friction="${mu} ${mu}"/>`);
+    if (o.movable) for (const g of ground) pairs.push(`    <pair geom1="${name}" geom2="${g}" condim="3" friction="${mu} ${mu}"/>`);
   });
-  if (!baseXml.includes('</worldbody>') || !baseXml.includes('</contact>')) throw new Error('The base scene has no worldbody or contact section to add a place to.');
-  return baseXml
-    .replace('</worldbody>', `    <!-- Place "${place.id}" (physics/src/scenes.js) -->\n${bodies.join('\n')}\n  </worldbody>`)
-    .replace('</contact>', `${pairs.join('\n')}\n  </contact>`);
+  if (!baseXml.includes('</worldbody>')) throw new Error('The base scene has no worldbody section to add a place to.');
+  const withBodies = baseXml.replace('</worldbody>', `    <!-- Place "${place.id}" (physics/src/scenes.js) -->\n${bodies.join('\n')}\n  </worldbody>`);
+  if (!pairs.length) return withBodies;
+  return withBodies.includes('</contact>')
+    ? withBodies.replace('</contact>', `${pairs.join('\n')}\n  </contact>`)
+    : withBodies.replace('</mujoco>', `  <contact>\n${pairs.join('\n')}\n  </contact>\n</mujoco>`);
 }

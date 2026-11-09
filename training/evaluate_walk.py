@@ -16,19 +16,19 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from .imitate import DEFAULT_MOTION, MIMIC_OBS_DIM, MimicEnv
+from .imitate import DEFAULT_MOTION, MIMIC_OBS_DIM, MimicEnv, senses
 from .ppo import ActorCritic
 
 
 def run(model: ActorCritic | None, motion: str = DEFAULT_MOTION) -> tuple[float, float, float, float]:
-    env = MimicEnv(seed=0, clips=(motion,))
+    env = MimicEnv(seed=0, clips=(motion,), **senses(model))
     env.reset()
     obs = env.reset_at(0.0)  # from the start of the clip, not a random instant
     errors = []
     start = env.data.qpos[:2].copy()
     while True:
         if model is None:
-            action = np.zeros(29)  # no policy: the reference pose played through the motors
+            action = np.zeros(env.nu)  # no policy: the reference pose played through the motors
         else:
             with torch.no_grad():
                 action = model.actor(model.norm(torch.as_tensor(obs)[None]))[0].numpy()
@@ -51,8 +51,7 @@ def main() -> None:
     t, total, err, walked = run(None, motion)
     print(f"{'sin política':>14}: sigue el clip {t:4.1f} s de {total:.1f}, error de pelvis {err:.2f} m, camina {walked:.1f} m")
     for path in paths:
-        model = ActorCritic(MIMIC_OBS_DIM)
-        model.load_state_dict(torch.load(path)["model"])
+        model = ActorCritic.from_state(torch.load(path)["model"])
         model.eval()
         t, total, err, walked = run(model, motion)
         print(f"{path.stem:>14}: sigue el clip {t:4.1f} s de {total:.1f}, error de pelvis {err:.2f} m, camina {walked:.1f} m")

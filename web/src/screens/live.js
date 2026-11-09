@@ -5,15 +5,20 @@
 // training it, training.js).
 //
 // Optional: a phone as the camera (docs/contrato.md, "El teléfono como cámara"). "Usar el teléfono
-// como cámara" opens a session on the video server and shows a QR; the phone opens #/camara and
+// como cámara" opens a session on the video server and shows a QR; the phone opens #/camera and
 // sends its poses with a small image of its camera; createPhoneCapture plays them here with the same
 // interface as the webcam, so everything below (the skeleton, mimic, recording) does not know which
 // camera it is, and the image goes where the webcam's video would, under the skeleton. Without the
 // server the button only says why; the webcam is untouched.
 import { addUserClip } from '../preloaded.js';
 import { mountRobotPane, robotPaneHTML } from '../robot-pane.js';
+import { escapeHtml } from '../i18n.js';
+import { A, L, T } from './strings/live.js';
 
-export const title = 'En vivo';
+// One string with one value, in a given language: the clip's name and the frame rate.
+const tl = (key, value, language) => L(key, { time: value, n: value }, language);
+
+export { title } from './strings/live.js';
 
 // Phones run MediaPipe's "lite" model: half the work, as data/live recommends.
 const SMALL_SCREEN = matchMedia('(max-width: 720px), (pointer: coarse)').matches;
@@ -47,7 +52,7 @@ const FOLLOW_S = 0.5;
 const LIVE_PIXEL_RATIO = 1.25;
 const LIVE_SHADOW_PX = 1024;
 
-// "?debug" in the address (tridi-alpha.vercel.app/?debug#/en-vivo) shows, once a second, how far the robot is from the person and
+// "?debug" in the address (tridi-alpha.vercel.app/?debug#/live) shows, once a second, how far the robot is from the person and
 // what it added that the person did not do (physics/ mimic's `fixes`): to tell a misread from a
 // fix while testing arms in front of a real camera (docs/investigacion/2026-10-24-brazos-humanos-en-vivo.md).
 // It also shows where each frame's time goes (camera models, the robot copying, the screen's
@@ -70,8 +75,8 @@ export function mount(root, { api }) {
   root.innerHTML = `
     <section class="page live">
       <header class="page-head">
-        <a class="back" href="#/" aria-label="Volver al inicio">←<span class="only-wide">&nbsp;Volver al inicio</span></a>
-        <h1>Entrena a Tridi en vivo</h1>
+        <a class="back" href="#/" ${A({ 'aria-label': 'back' })}>←<span class="only-wide">&nbsp;${T('back')}</span></a>
+        <h1>${T('head')}</h1>
       </header>
       <div class="live-grid">
         <section class="pane camera-pane">
@@ -80,33 +85,33 @@ export function mount(root, { api }) {
           <canvas class="camera-overlay"></canvas>
           <div class="camera-off">
             <ol class="steps">
-              <li>Deja que la página use tu cámara.</li>
-              <li>Que se vean tus hombros, brazos y manos. Para que camine, aléjate hasta los pies.</li>
-              <li>Para que copie tus dedos, acércate a un metro de la cámara.</li>
-              <li>Muévete despacio: Tridi copia lo que haces.</li>
+              <li>${T('step1')}</li>
+              <li>${T('step2')}</li>
+              <li>${T('step3')}</li>
+              <li>${T('step4')}</li>
             </ol>
           </div>
           <div class="phone-qr" hidden>
             <div class="qr"></div>
-            <p>Escanea con la cámara del teléfono y acepta usar su cámara.</p>
+            <p>${T('scan')}</p>
             <p class="qr-session"></p>
           </div>
-          <p class="pane-label camera-label">Tú</p>
+          <p class="pane-label camera-label">${T('you')}</p>
         </section>
-        ${robotPaneHTML('Robot · te copia', { push: false })}
+        ${robotPaneHTML(T('robot'), { push: false })}
       </div>
       <div class="live-bar">
         <div class="row">
-          <button class="primary camera-toggle" type="button">Encender la cámara</button>
-          <button class="phone-toggle" type="button">Usar el teléfono<span class="only-wide"> como cámara</span></button>
-          <button class="record-toggle" type="button" hidden>Parar y guardar</button>
+          <button class="primary camera-toggle" type="button">${T('cameraOn')}</button>
+          <button class="phone-toggle" type="button">${T('phone')}</button>
+          <button class="record-toggle" type="button" hidden>${T('stopSave')}</button>
         </div>
-        <p class="recording" hidden><span class="rec-dot"></span><span class="rec-time">0:00</span> / ${clock(MAX_RECORD_S)} · camina, salta: el robot va adonde vas</p>
+        <p class="recording" hidden><span class="rec-dot"></span><span class="rec-time">0:00</span> / ${clock(MAX_RECORD_S)} · ${T('recording')}</p>
         <div class="saved" hidden>
           <p class="saved-text"></p>
           <div class="row">
-            <a class="button primary see-clip" href="#/simulaciones">Ver la simulación</a>
-            <button class="again" type="button">Grabar otro</button>
+            <a class="button primary see-clip" href="#/simulations">${T('seeSim')}</a>
+            <button class="again" type="button">${T('again')}</button>
           </div>
         </div>
         <p class="live-status" aria-live="polite"></p>
@@ -124,14 +129,15 @@ export function mount(root, { api }) {
   const ctx = overlay.getContext('2d');
   const button = $('.camera-toggle');
   const phoneButton = $('.phone-toggle');
-  const say = (text, isError = false) => {
-    $('.live-status').textContent = text;
+  // say and note take markup (T() or escaped text from outside).
+  const say = (markup, isError = false) => {
+    $('.live-status').innerHTML = markup;
     $('.live-status').classList.toggle('error', isError);
   };
   // Phone events last longer than the status line, which rewrites itself every second.
-  const note = (text) => {
-    $('.phone-note').textContent = text;
-    $('.phone-note').hidden = !text;
+  const note = (markup) => {
+    $('.phone-note').innerHTML = markup;
+    $('.phone-note').hidden = !markup;
   };
 
   let live = null; // the webcam capture or the phone capture: the same interface
@@ -201,23 +207,24 @@ export function mount(root, { api }) {
     const seconds = (performance.now() - recordStart) / 1000;
     // The result gets its own block: the live status line rewrites itself every second. A saved
     // clip opens in its simulation, where it is trained.
-    const result = (text, clip = null) => {
-      $('.saved-text').textContent = text;
+    const result = (markup, clip = null) => {
+      $('.saved-text').innerHTML = markup;
       $('.saved-text').classList.toggle('error', !clip);
       $('.see-clip').hidden = !clip;
-      if (clip) $('.see-clip').href = `#/simulaciones/${encodeURIComponent(clip.id)}`;
+      if (clip) $('.see-clip').href = `#/simulations/${encodeURIComponent(clip.id)}`;
       $('.saved').hidden = false;
     };
     let clip;
     try {
       clip = live.stopRecording();
     } catch {
-      return result('No se te vio lo suficiente. Que se vean tus hombros, brazos y manos, y graba otra vez.');
+      return result(T('notSeen'));
     }
-    if (seconds < MIN_RECORD_S) return result('La grabación fue muy corta. Graba al menos 2 segundos.');
-    const time = new Date().toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-    addUserClip(clip, `${isPhone() ? 'Tu teléfono' : 'Tu cámara'} · ${time}`);
-    result(`Movimiento guardado: ${Math.round(seconds)} s, se te vio el ${Math.round(100 * clip.quality.valid_ratio)} % del tiempo.`, clip);
+    if (seconds < MIN_RECORD_S) return result(T('tooShort'));
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const key = isPhone() ? 'phoneClip' : 'cameraClip';
+    addUserClip(clip, { es: tl(key, time, 'es'), en: tl(key, time, 'en') });
+    result(T('saved', { seconds: Math.round(seconds), pct: Math.round(100 * clip.quality.valid_ratio) }), clip);
   }
 
   function stop() {
@@ -232,9 +239,9 @@ export function mount(root, { api }) {
     phoneImage.removeAttribute('src');
     root.querySelector('.live').classList.remove('camera-on', 'phone-on');
     $('.phone-qr').hidden = true;
-    $('.camera-label').textContent = 'Tú';
-    button.textContent = 'Encender la cámara';
-    phoneButton.innerHTML = 'Usar el teléfono<span class="only-wide"> como cámara</span>';
+    $('.camera-label').innerHTML = T('you');
+    button.innerHTML = T('cameraOn');
+    phoneButton.innerHTML = T('phone');
     $('.live-warning').hidden = true;
   }
 
@@ -259,17 +266,15 @@ export function mount(root, { api }) {
       $('.live-debug').textContent = `${body}\n${live?.fps() ?? 0} cuadros/s de cámara · ${perf.frames.length} fps de pantalla · ${models}robot ${ms(perf.mimic)}`;
     }
     const phone = isPhone();
-    if (!robot.view) say('El robot todavía está cargando; ya te va a copiar.');
-    else if (!pose) say(phone ? 'El teléfono no ve a nadie. Que se vea al menos de la cintura para arriba.' : 'No te veo. Que se vea al menos de la cintura para arriba.');
-    else if (!pose.visible) say(phone ? 'El teléfono ve a medias. Que se vean los hombros, los brazos y las manos.' : 'Te veo a medias. Que se vean tus hombros, brazos y manos.');
-    else say(phone ? '¡Conectado! Tridi copia a quien filma el teléfono.' : '¡Te veo! Muévete despacio y Tridi te copia.');
+    if (!robot.view) say(T('robotLoading'));
+    else if (!pose) say(T(phone ? 'phoneNobody' : 'nobody'));
+    else if (!pose.visible) say(T(phone ? 'phoneHalf' : 'half'));
+    else say(T(phone ? 'phoneOk' : 'ok'));
     const fps = live?.fps() ?? 0;
     const slow = now - startedAt > WARMUP_MS && fps < MIN_FPS;
     $('.live-warning').hidden = !slow;
-    const frames = `${fps} ${fps === 1 ? 'cuadro' : 'cuadros'} por segundo`;
-    $('.live-warning').textContent = phone
-      ? `El teléfono va algo lento (${frames}): el robot puede moverse a saltos. Acércalo a la luz o cierra otras apps.`
-      : `Tu equipo va algo lento (${frames}): el robot puede moverse a saltos. Cierra otras pestañas o acércate a la luz.`;
+    const frames = (l) => (fps === 1 ? tl('framesOne', '', l) : tl('framesMany', fps, l));
+    $('.live-warning').innerHTML = T(phone ? 'phoneSlow' : 'slow', { frames });
   }
 
   let drawSkeleton;
@@ -277,7 +282,7 @@ export function mount(root, { api }) {
   async function start() {
     if (live) stop(); // the phone was the camera: back to the webcam
     button.disabled = true;
-    say('Preparando la cámara…');
+    say(T('preparing'));
     try {
       // MediaPipe (several MB) is only downloaded when the camera is asked for.
       capture ??= await import('tridi-live');
@@ -289,19 +294,19 @@ export function mount(root, { api }) {
         // laptops only.
         hands: !SMALL_SCREEN,
         onProgress: ({ stage, done }) =>
-          say(stage === 'model' ? (done ? 'Listo. Ahora acepta el permiso de la cámara.' : 'Preparando la cámara…') : 'Esperando el permiso de la cámara…'),
+          say(T(stage === 'model' ? (done ? 'allow' : 'preparing') : 'waitingPermission')),
         onPose,
       });
       if (disposed) return session.stop(); // the user left while it started
       live = session;
       startedAt = performance.now();
       root.querySelector('.live').classList.add('camera-on');
-      button.textContent = 'Apagar la cámara';
+      button.innerHTML = T('cameraOff');
       startRecording();
     } catch (error) {
-      // CameraError messages are already in plain Spanish (permission denied, no camera).
+      // CameraError messages come from data/live, in plain Spanish (permission denied, no camera).
       const isCamera = capture && error instanceof capture.CameraError;
-      say(isCamera ? error.message : 'No se pudo encender la cámara. Recarga la página e intenta de nuevo.', true);
+      say(isCamera ? escapeHtml(error.message) : T('cameraFailed'), true);
       if (!isCamera) console.error(error);
     } finally {
       button.disabled = false;
@@ -318,14 +323,14 @@ export function mount(root, { api }) {
       // The page may have opened before data/serve.sh started (or before it restarted on a new
       // tunnel): look for the server again instead of trusting what was found on load.
       if (!api.ok) {
-        say('Buscando el servidor de videos…');
+        say(T('lookingServer'));
         await api.recheck();
       }
-      if (!api.ok) return say('Para usar el teléfono hace falta el servidor de videos, y ahora no está encendido.', true);
-      if (LOCAL_API.test(api.url)) return say('El teléfono no puede llegar a un servidor en esta máquina: abre la web con el enlace de data/serve.sh (?api=<túnel>).', true);
+      if (!api.ok) return say(T('phoneNoServer'), true);
+      if (LOCAL_API.test(api.url)) return say(T('phoneLocal'), true);
       returnToWebcam = !!live && !isPhone();
       stop(); // keeps what the webcam recorded
-      say('Abriendo la sesión para el teléfono…');
+      say(T('opening'));
       // tridi-live and the QR library only download when the phone is asked for.
       const [tridi, { renderSVG }] = await Promise.all([capture ?? import('tridi-live'), import('uqr')]);
       capture = tridi;
@@ -336,16 +341,16 @@ export function mount(root, { api }) {
       // Error level M (15 % of the code may be unreadable) scans fine from a laptop screen under
       // stand lights; the margin keeps it readable against the pane.
       $('.qr').innerHTML = renderSVG(url, { ecc: 'M', border: 2, pixelSize: 6, blackColor: '#0d0d0b', whiteColor: '#ffffff' });
-      $('.qr-session').textContent = `sesión ${sessionId}`;
+      $('.qr-session').innerHTML = T('session', { id: escapeHtml(sessionId) });
       $('.phone-qr').hidden = false;
       live = capture.createPhoneCapture(api.url, sessionId, { onPose, onImage, onStatus: onPhoneStatus });
       root.querySelector('.live').classList.add('phone-on');
-      $('.camera-label').textContent = 'Tu teléfono';
-      phoneButton.innerHTML = 'Dejar<span class="only-wide"> de usar</span> el teléfono';
-      say('Escanea el código con el teléfono. Mientras tanto, la webcam no se usa.');
+      $('.camera-label').innerHTML = T('yourPhone');
+      phoneButton.innerHTML = T('phoneStop');
+      say(T('scanNow'));
     } catch (error) {
       const known = capture && error instanceof capture.UploadError;
-      say(known ? error.message : 'No se pudo abrir la sesión del teléfono. Revisa el servidor e intenta de nuevo.', true);
+      say(known ? escapeHtml(error.message) : T('phoneFailed'), true);
       if (!known) console.error(error);
     } finally {
       phoneButton.disabled = false;
@@ -371,16 +376,16 @@ export function mount(root, { api }) {
         startRecording();
       }
     } else if (state === 'lost' || state === 'ended') {
-      const why = state === 'lost' ? `El teléfono dejó de mandar (${capture.PHONE_SILENCE_S} s sin cuadros).` : 'El teléfono cerró la sesión.';
+      const why = state === 'lost' ? T('lost', { s: capture.PHONE_SILENCE_S }) : T('ended');
       stop(); // keeps what was recorded
-      note(`${why} ${returnToWebcam ? 'Volví a la webcam.' : 'La webcam vuelve a ser la cámara: enciéndela cuando quieras.'}`);
+      note(`${why} ${T(returnToWebcam ? 'backWebcam' : 'webcamAgain')}`);
       if (returnToWebcam) start();
     }
   }
 
   function stopPhone() {
     stop();
-    note('Dejaste de usar el teléfono. La webcam vuelve a ser la cámara.');
+    note(T('stoppedPhone'));
   }
 
   button.onclick = () => (live && !isPhone() ? stop() : start());

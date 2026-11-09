@@ -23,35 +23,40 @@ import { createPushArrow } from '../push-arrow.js';
 import { attachRobot, onRobotProgress, robotView } from '../robot-host.js';
 import { prefetch } from '../router.js';
 import { SkeletonView } from '../skeleton.js';
+import { fmt, fmtInt, lang, langSwitch, onLang } from '../i18n.js';
+import { A, T } from '../landing/strings.js';
 import { createPoseDrawing, VIDEOS } from '../video-overlay.js';
 
 gsap.registerPlugin(ScrollTrigger);
 
 export const title = '';
 
-const REPO = 'https://github.com/platanus-hack/platanus-hack-26-ve-team-26';
+const REPO = 'https://github.com/Torpass/tridi';
 // The walk of Capture: the clip extracted from this very video (data/samples/mixkit-4855.mp4,
 // re-encoded small into public/media). Clip and video start together and last the same 11.8 s.
-const WALK = preloaded.find((item) => item.clip === 'clip_2026-10-23_caminar-perfil_01');
-const WALK_VIDEO = `${import.meta.env.BASE_URL}media/caminar.mp4`;
+// Capture 2.0's walk (GVHMR, data/capture2): the same Mixkit video and frames as the MediaPipe one it
+// replaces, so the robot, the 3D skeleton and the video stay in step. Its RobotMotion is saved in
+// physics/motions, so it starts at once.
+const WALK = preloaded.find((item) => item.clip === 'clip_caminar-perfil-gvhmr');
+const MEDIA = `${import.meta.env.BASE_URL}media/`;
+const WALK_VIDEO = `${MEDIA}caminar.mp4`;
 const PUSH_N = 250; // physics/ pushes with 250 N for 0.1 s (physics/README.md)
 const FALLEN_PELVIS_M = 0.45; // the standing G1 has its pelvis at 0.78 m
-const GYM_PUSH_EVERY_S = 2.5; // the Gym pushes the standing robot this often, so every level shows itself
+const GYM_PUSH_EVERY_S = 3.2; // the Gym pushes the standing robot this often, giving it time to recover its stance
 // The first push comes sooner, so a stage shows itself while its stop holds the scroll; never
 // before 2 s, the earliest training ever pushes (training/env.py PUSH_EVERY_S): earlier is outside
 // what the policies learned, and "Estable" could fall.
 const GYM_FIRST_PUSH_S = 2.0;
 const GYM_RESTART_S = 1.6; // a fallen robot lies this long before it is stood up again
 const AFTER_PUSH_S = 5; // after a push in the hero, the robot stands this long before it is reset
-// The Gym in four stops of the real training, each a saved checkpoint of its iterations, with what
-// training/README.md measured for it: seconds standing (of 20) and 250 N pushes held (of 4). The
-// third is v2, the first that held every push; the last is the one the page uses (stand-v7d),
-// which gave up a few pushes to stop pivoting on one foot.
+// The Gym in four stops of the real training (stand-300m, training/README.md), each a saved
+// checkpoint with what training.evaluate measured for it: seconds standing (of 20) and 250 N
+// pushes held (of 4).
 const GYM_STAGES = [
-  { level: 'g1-stand-step-0', steps: 0, verdict: 'No sirve', up: '1,1 s', pushes: '0 de 4', text: 'Se cae en un segundo.' },
-  { level: 'g1-stand-step-10000000', steps: 10e6, verdict: 'A medias', up: '9,6 s', pushes: '1 de 4', text: 'Se para, pero un empujón lo tumba.' },
-  { level: 'g1-stand-v2', steps: 40e6, verdict: 'Estable', up: '20 s', pushes: '4 de 4', text: 'Aguanta todo, pero girando sobre un pie.' },
-  { level: 'g1-stand', steps: 60e6, verdict: 'Quieto', up: '20 s', pushes: '3,6 de 4', text: 'Estable y sin girar. Es el de arriba.' },
+  { level: 'g1-stand-step-0', steps: 0, label: '0', up: 1.1, pushes: 0, maxN: 0 },
+  { level: 'g1-stand-step-10000000', steps: 10e6, label: '10 M', up: 11.2, pushes: 1.6, maxN: 200 },
+  { level: 'g1-stand-step-100000000', steps: 100e6, label: '100 M', up: 20, pushes: 4, maxN: 350 },
+  { level: 'g1-stand', steps: 300e6, label: '300 M', up: 20, pushes: 4, maxN: 500 },
 ];
 // The policy decides 50 times a second (training/README.md), for the simulation's readout.
 const DECISIONS_PER_S = 50;
@@ -81,8 +86,8 @@ const SHOTS = {
 // stands in the upper half of the screen.
 const narrowShot = (shot) => ({ ...shot, shift: 0, dist: shot.dist * 1.6, aim: shot.aim - 0.4 });
 
-const num = (value, digits = 2) => value.toFixed(digits).replace('.', ',');
-const steps = (n) => Math.round(n).toLocaleString('es');
+// "3,6 de 4" / "3.6 of 4": pushes held, in the language's own decimal mark.
+const T_OF = (n, l) => (l === 'en' ? `${fmt(n, n % 1 ? 1 : 0)(l)} of 4` : `${fmt(n, n % 1 ? 1 : 0)(l)} de 4`);
 
 export function mount(root) {
   document.documentElement.classList.add('is-landing');
@@ -92,46 +97,51 @@ export function mount(root) {
       <div class="boot">
         ${loader('small')}
         <p>mujoco.wasm <b class="boot-files">0/39</b></p>
-        <p class="boot-line">cargando el mundo de física</p>
+        <p class="boot-line">${T('boot.world')}</p>
         <div class="boot-track"><i class="boot-bar"></i></div>
       </div>
     </div>
-    <div class="film-hud" aria-hidden="true">
-      <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
-      <p class="sim-readout"><span data-sim="rates">MuJoCo</span><span>t <b data-sim="time">0,0</b> s</span><span>contactos <b data-sim="contacts">0</b></span></p>
+    <div class="film-hud">
+      <i class="corner tl" aria-hidden="true"></i><i class="corner tr" aria-hidden="true"></i><i class="corner bl" aria-hidden="true"></i><i class="corner br" aria-hidden="true"></i>
+      <div class="sim-readout">
+        <span data-sim="rates">MuJoCo</span><span>t <b data-sim="time">0,0</b> s</span><span>${T('sim.contacts')} <b data-sim="contacts">0</b></span>
+        <button type="button" class="sim-info-btn" aria-label="Info">ⓘ<span class="sim-tooltip" role="tooltip">${T('sim.info')}</span></button>
+      </div>
     </div>
     <div class="film-shade" aria-hidden="true"></div>
     <div class="film-wash" aria-hidden="true"></div>
 
     <header class="topbar">
-      <a class="wordmark" href="#/" aria-label="Tridi, inicio">${LOGO}${WORDMARK}</a>
-      <nav class="topnav" aria-label="Producto">
+      <a class="wordmark" href="#/" ${A({ 'aria-label': 'nav.home' })}>${LOGO}${WORDMARK}</a>
+      <nav class="topnav" ${A({ 'aria-label': 'nav.product' })}>
         <a href="#capture">Capture</a>
         <a href="#gym">Gym</a>
         <a href="#policy">Policy</a>
+        <a href="#/simulations" data-warm="simulations">${T('nav.simulations')}</a>
+        <a href="#/milestones" data-warm="milestones">${T('nav.milestones')}</a>
       </nav>
-      <a class="btn btn-signal btn-small" href="#probar">Probar<span class="only-wide"> en vivo</span></a>
+      ${langSwitch()}
+      <a class="btn btn-signal btn-small" href="#try"><span class="only-wide">${T('nav.tryLive')}</span><span class="only-narrow">${T('nav.try')}</span></a>
     </header>
 
-    <section class="chapter hero" id="inicio" data-shot="hero" data-mode="stand">
-      <div class="hero-live"><i class="live-dot"></i>Simulación en vivo · Unitree G1 · MuJoCo</div>
+    <section class="chapter hero" id="home" data-shot="hero" data-mode="stand">
+      <div class="hero-live"><i class="live-dot"></i>${T('hero.live')}</div>
       <div class="caption hero-caption">
-        <p class="eyebrow">Physical AI para humanoides</p>
-        <h1>Robots que aprenden <em>de un video</em></h1>
-        <p class="hero-lede"><span class="only-wide">Grabas a una persona moviéndose. Un humanoide aprende a hacerlo igual, practicando en física real hasta no caerse.</span><span class="only-narrow">Grabas a una persona. Un humanoide aprende a moverse igual, con física real.</span></p>
-        <ol class="hero-steps" aria-label="Cómo funciona">
-          <li><b>01</b><span class="only-wide">Video de celular</span><span class="only-narrow">Video</span></li>
-          <li><b>02</b>Esqueleto 3D</li>
-          <li><b>03</b><span class="only-wide">Robot que practica</span><span class="only-narrow">Robot practica</span></li>
+        <h1>${T('hero.title')}</h1>
+        <p class="hero-lede"><span class="only-wide">${T('hero.lede')}</span><span class="only-narrow">${T('hero.ledeShort')}</span></p>
+        <ol class="hero-steps" ${A({ 'aria-label': 'hero.how' })}>
+          <li><b>01</b><span class="only-wide">${T('hero.step1')}</span><span class="only-narrow">${T('hero.step1Short')}</span></li>
+          <li><b>02</b>${T('hero.step2')}</li>
+          <li><b>03</b><span class="only-wide">${T('hero.step3')}</span><span class="only-narrow">${T('hero.step3Short')}</span></li>
         </ol>
         <div class="cta-row">
-          <button class="btn btn-signal hero-push" type="button" disabled>Empújalo <kbd>espacio</kbd></button>
-          <a class="btn btn-ghost" href="#capture">Cómo aprende</a>
+          <button class="btn btn-signal hero-push" type="button" disabled>${T('hero.push')} <kbd>${T('key.space')}</kbd></button>
+          <a class="btn btn-ghost" href="#capture">${T('hero.howLink')}</a>
         </div>
       </div>
       <div class="hud">
-        <p class="state" data-state="stand"><i></i><span>Física real · de pie con su política</span></p>
-        <p class="tally"><span data-hud="pushes">0</span> empujones · <span data-hud="falls">0</span> caídas</p>
+        <p class="state" data-state="stand"><i></i><span>${T('hud.stand')}</span></p>
+        <p class="tally">${T('hud.tally', { pushes: '<span data-hud="pushes">0</span>', falls: '<span data-hud="falls">0</span>' })}</p>
       </div>
       <div class="scroll-cue" aria-hidden="true"><span></span></div>
     </section>
@@ -142,17 +152,15 @@ export function mount(root) {
           <figure class="frame frame-video">
             <video class="walk-video" src="${WALK_VIDEO}" muted playsinline loop preload="auto"></video>
             <canvas class="walk-overlay" aria-hidden="true"></canvas>
-            <figcaption><span class="only-wide">Video de celular · Mixkit</span><span class="only-narrow">Video</span></figcaption>
           </figure>
           <figure class="frame frame-skeleton">
             <canvas class="skeleton-canvas"></canvas>
-            <figcaption><span class="only-wide">Esqueleto 3D · 33 puntos · tenue: lo que la cámara no ve</span><span class="only-narrow">Esqueleto 3D</span></figcaption>
           </figure>
         </div>
-        <div class="caption capture-caption">
+        <div class="caption capture-caption panel">
           <p class="product">Tridi Capture</p>
-          <h2><span class="only-wide">De un video de celular al cuerpo del robot</span><span class="only-narrow">Del video al robot</span></h2>
-          <p><span class="only-wide">El esqueleto 3D de la persona, pasado a las 29 articulaciones del robot. Aquí lo copia sin física.</span><span class="only-narrow">El esqueleto 3D de la persona, pasado a las 29 articulaciones del robot.</span></p>
+          <h2><span class="only-wide">${T('capture.title')}</span><span class="only-narrow">${T('capture.titleShort')}</span></h2>
+          <p><span class="only-wide">${T('capture.text')}</span><span class="only-narrow">${T('capture.textShort')}</span></p>
         </div>
       </div>
     </section>
@@ -161,20 +169,20 @@ export function mount(root) {
       <div class="sticky">
         <div class="caption gym-caption panel">
           <p class="product">Tridi Gym</p>
-          <h2>Practica hasta no caerse</h2>
+          <h2>${T('gym.title')}</h2>
+          <p class="gym-lede"><span class="only-wide">${T('gym.lede')}</span><span class="only-narrow">${T('gym.ledeShort')}</span></p>
           <div class="steps-meter">
-            <p class="steps-now"><b data-gym="steps">0</b><span>pasos de<br>práctica</span></p>
-            <p class="gym-lede only-narrow">Lo empujamos, se cae y vuelve a intentar. Toca una etapa.</p>
+            <p class="steps-now"><b data-gym="steps">0</b><span>${T('gym.stepsLabel')}</span></p>
             <div class="steps-axis">
               <div class="axis-track" aria-hidden="true">
                 <i class="axis-line"><i class="axis-fill"></i></i>
                 ${GYM_STAGES.map((stage) => `<i class="axis-tick" style="--at: ${(100 * stage.steps) / GYM_STAGES.at(-1).steps}%"></i>`).join('')}
               </div>
-              <div class="axis-stops" role="group" aria-label="Etapas del entrenamiento">
+              <div class="axis-stops" role="group" ${A({ 'aria-label': 'gym.stages' })}>
               ${GYM_STAGES.map((stage, i) => `
                 <button class="axis-stop" type="button" data-stage="${i}" style="--at: ${(100 * stage.steps) / GYM_STAGES.at(-1).steps}%">
-                  <span class="axis-label">${stage.steps ? `${stage.steps / 1e6} M` : '0'} pasos</span>
-                  <span class="axis-verdict">${stage.verdict}</span>
+                  <span class="axis-label">${T('gym.stepsAt', { n: stage.label })}</span>
+                  <span class="axis-verdict">${T(`stage.${i}.verdict`)}</span>
                 </button>`).join('')}
               </div>
             </div>
@@ -183,9 +191,19 @@ export function mount(root) {
               <span class="stage-numbers" data-gym="numbers"></span>
             </div>
           </div>
-          <p class="gym-status"><i class="live-dot"></i><span><span data-gym="up">—</span> de pie · <span data-gym="status">en vivo</span></span></p>
-          <button class="btn btn-signal btn-small gym-push" type="button" disabled>Empújalo <kbd>espacio</kbd></button>
-          <p class="gym-hint"><kbd>enter</kbd> o baja para entrenarlo más</p>
+          <p class="gym-status"><i class="live-dot"></i><span><span data-gym="up">—</span> ${T('gym.standing')} · <span data-gym="status">${T('gym.live')}</span></span></p>
+          <div class="gym-controls">
+            <button class="btn btn-signal btn-small gym-push" type="button" disabled>${T('hero.push')} <kbd>${T('key.space')}</kbd></button>
+            <label class="gym-force">
+              <span class="gym-force-head"><span>${T('gym.force')}</span><b data-gym="force">${PUSH_N} N</b></span>
+              <div class="gym-force-track">
+                <i class="gym-force-zone" data-gym="force-zone"></i>
+                <input type="range" class="gym-force-slider" min="50" max="500" step="50" value="${PUSH_N}" />
+              </div>
+              <span class="gym-force-cap" data-gym="force-cap"></span>
+            </label>
+          </div>
+          <p class="gym-hint">${T('gym.hint')}</p>
         </div>
       </div>
     </section>
@@ -194,81 +212,66 @@ export function mount(root) {
       <div class="sticky">
         <div class="caption policy-caption panel">
           <p class="product">Tridi Policy</p>
-          <h2><span class="only-wide">Te llevas el cerebro entrenado del robot</span><span class="only-narrow">Te llevas su cerebro entrenado</span></h2>
-          <p class="policy-lede">Una red neuronal pequeña (la política) que mueve al robot sola. Corre en tu navegador.</p>
+          <h2><span class="only-wide">${T('policy.title')}</span><span class="only-narrow">${T('policy.titleShort')}</span></h2>
+          <p class="policy-lede">${T('policy.lede')}</p>
           <ul class="specs">
-            <li><b>265 KB</b><span><span class="only-wide">la red completa que mueve al robot</span><span class="only-narrow">pesa la red</span></span></li>
-            <li><b>29</b><span><span class="only-wide">motores que controla a la vez</span><span class="only-narrow">motores a la vez</span></span></li>
-            <li><b>20 ms</b><span><span class="only-wide">entre una decisión y la siguiente</span><span class="only-narrow">entre decisiones</span></span></li>
-            <li><b>&lt; 1 ms</b><span><span class="only-wide">lo que tarda en decidir</span><span class="only-narrow">en decidir</span></span></li>
+            <li><b>150–500 KB</b><span><span class="only-wide">${T('policy.size')}</span><span class="only-narrow">${T('policy.sizeShort')}</span></span></li>
+            <li><b>19–51 DOF</b><span><span class="only-wide">${T('policy.motors')}</span><span class="only-narrow">${T('policy.motorsShort')}</span></span></li>
+            <li><b>50–250 Hz</b><span><span class="only-wide">${T('policy.rate')}</span><span class="only-narrow">${T('policy.rateShort')}</span></span></li>
+            <li><b>&lt; 0.5 ms</b><span><span class="only-wide">${T('policy.latency')}</span><span class="only-narrow">${T('policy.latencyShort')}</span></span></li>
           </ul>
-          <p class="policy-note">Con ella van los datos del movimiento, probados en cuatro mundos.</p>
-          <a class="btn btn-signal btn-small policy-data" href="#/entrega" data-warm="entrega">Ver los datos entrenados →</a>
+          <p class="policy-note">${T('policy.note')}</p>
+          <a class="btn btn-signal btn-small policy-data" href="#/delivery" data-warm="delivery">${T('policy.cta')}</a>
         </div>
       </div>
     </section>
 
-    <nav class="phone-arrows" aria-label="Secciones">
-      <button type="button" class="arrow-up" aria-label="Sección anterior">↑</button>
-      <button type="button" class="arrow-down" aria-label="Sección siguiente">↓</button>
+    <nav class="phone-arrows" ${A({ 'aria-label': 'arrows.label' })}>
+      <button type="button" class="arrow-up" ${A({ 'aria-label': 'arrows.up' })}>↑</button>
+      <button type="button" class="arrow-down" ${A({ 'aria-label': 'arrows.down' })}>↓</button>
     </nav>
 
-    <section class="chapter closing" id="equipos" data-shot="close" data-mode="stand">
-      <div class="closing-inner" id="probar" data-offset="-112">
-        <p class="product">Para equipos de humanoides</p>
-        <h2 class="manifesto">Los robots ya tienen cuerpo. Les falta experiencia.</h2>
-        <p class="closing-text">Cualquier video de una persona, convertido en práctica para tu robot.</p>
-        <nav class="tries" aria-label="Probar Tridi">
-          <a class="try" href="#/en-vivo" data-warm="en-vivo">
-            <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="14" width="28" height="20" rx="3"/><path d="M34 21l9-5v16l-9-5z"/><circle cx="20" cy="24" r="5"/></svg>
-            <b><span class="only-wide">Muévete y el robot te copia</span><span class="only-narrow">Cámara en vivo</span></b>
-            <span class="try-sub only-narrow">Muévete y el robot te copia</span>
-            <span class="try-go">Abrir la cámara →</span>
-          </a>
-          <a class="try" href="#/subir" data-warm="subir">
-            <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="26" rx="3"/><path d="M24 31V17M18 22l6-6 6 6"/><path d="M14 40h20"/></svg>
-            <b><span class="only-wide">Sube un video de una persona</span><span class="only-narrow">Subir un video</span></b>
-            <span class="try-sub only-narrow">De perfil y con el cuerpo entero</span>
-            <span class="try-go">Elegir un video →</span>
-          </a>
-          <a class="try" href="#/entrega" data-warm="entrega">
-            <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="16" width="32" height="24" rx="2"/><path d="M8 24h32M24 6v14M18 14l6 6 6-6"/></svg>
-            <b><span class="only-wide">La política y los datos que entregamos</span><span class="only-narrow">La entrega</span></b>
-            <span class="try-sub only-narrow">La política y los datos del robot</span>
-            <span class="try-go">Ver la entrega →</span>
-          </a>
-        </nav>
-        <div class="progress-track" aria-label="Dónde estamos">
-          <div class="track-line" aria-hidden="true"><i class="track-fill"></i></div>
-          <ol class="milestones">
-            <li class="done">
-              <i class="dot" aria-hidden="true"></i>
-              <span class="when">Hoy</span>
-              <b><span class="only-wide">Pararse y aguantar empujones</span><span class="only-narrow">De pie, aguanta empujones</span></b>
-              <span class="proof">${GYM_STAGES.at(-1).pushes} empujones de ${PUSH_N} N</span>
-            </li>
-            <li class="now">
-              <i class="dot" aria-hidden="true"></i>
-              <span class="when">Entrenando</span>
-              <b><span class="only-wide">Caminar como la persona del video</span><span class="only-narrow">Caminar</span></b>
-              <span class="proof">${walkPolicy ? `${steps(walkPolicy.steps / 1e6)} M pasos · ` : ''}todavía no camina solo</span>
-            </li>
-            <li class="next">
-              <i class="dot" aria-hidden="true"></i>
-              <span class="when">Lo que viene</span>
-              <b><span class="only-wide">Cualquier movimiento, en cualquier terreno</span><span class="only-narrow">Cualquier terreno</span></b>
-            </li>
-          </ol>
+    <section class="chapter closing" id="teams" data-shot="close" data-mode="stand">
+      <div class="closing-sticky">
+        <div class="closing-inner" id="try" data-offset="-112">
+          <h2 class="manifesto">${T('close.manifesto')}</h2>
+          <p class="closing-text">${T('close.text')}</p>
+          <nav class="tries" ${A({ 'aria-label': 'close.tries' })}>
+            <a class="try" href="#/simulations" data-warm="simulations">
+              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/></svg>
+              <b><span class="only-wide">${T('try.sims')}</span><span class="only-narrow">${T('try.simsShort')}</span></b>
+              <span class="try-sub only-narrow">${T('try.simsSub')}</span>
+              <span class="try-go">${T('try.simsGo')}</span>
+            </a>
+            <a class="try" href="#/live" data-warm="live">
+              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="14" width="28" height="20" rx="3"/><path d="M34 21l9-5v16l-9-5z"/><circle cx="20" cy="24" r="5"/></svg>
+              <b><span class="only-wide">${T('try.live')}</span><span class="only-narrow">${T('try.liveShort')}</span></b>
+              <span class="try-sub only-narrow">${T('try.live')}</span>
+              <span class="try-go">${T('try.liveGo')}</span>
+            </a>
+            <a class="try" href="#/upload" data-warm="upload">
+              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="26" rx="3"/><path d="M24 31V17M18 22l6-6 6 6"/><path d="M14 40h20"/></svg>
+              <b><span class="only-wide">${T('try.upload')}</span><span class="only-narrow">${T('try.uploadShort')}</span></b>
+              <span class="try-sub only-narrow">${T('try.uploadSub')}</span>
+              <span class="try-go">${T('try.uploadGo')}</span>
+            </a>
+            <a class="try" href="#/delivery" data-warm="delivery">
+              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="16" width="32" height="24" rx="2"/><path d="M8 24h32M24 6v14M18 14l6 6 6-6"/></svg>
+              <b><span class="only-wide">${T('try.delivery')}</span><span class="only-narrow">${T('try.deliveryShort')}</span></b>
+              <span class="try-sub only-narrow">${T('try.deliverySub')}</span>
+              <span class="try-go">${T('try.deliveryGo')}</span>
+            </a>
+          </nav>
         </div>
       </div>
       <footer class="footer">
-        <p>Física: MuJoCo, el estándar en robótica. Lo nuestro es todo lo que va encima.</p>
         <div class="foot-row">
           <span class="wordmark big" aria-label="Tridi">${LOGO}${WORDMARK}</span>
           <dl class="foot-specs">
-            <div><dt>Hecho en</dt><dd>Platanus Hack 26, Caracas</dd></div>
-            <div><dt>Robot</dt><dd>Unitree G1, MuJoCo Menagerie</dd></div>
-            <div><dt>Código</dt><dd><a href="${REPO}" target="_blank" rel="noopener">Abierto en GitHub</a></dd></div>
+            <div><dt>${T('foot.madeAt')}</dt><dd>Platanus Hack 26, Caracas</dd></div>
+            <div><dt>${T('foot.robot')}</dt><dd>Unitree G1 · Unitree H1 · Luigi Lab 3 (Sim-to-Real)</dd></div>
+            <div><dt>${T('foot.milestones')}</dt><dd><a href="#/milestones" data-warm="milestones">${T('foot.milestonesLink')}</a></dd></div>
+            <div><dt>${T('foot.code')}</dt><dd><a href="${REPO}" target="_blank" rel="noopener">${T('foot.repo')}</a></dd></div>
           </dl>
         </div>
       </footer>
@@ -295,10 +298,20 @@ export function mount(root) {
     gsap.ticker.add(tick);
     gsap.ticker.lagSmoothing(0);
   }
-  // A target's page position, moved by its data-offset (px): "#probar" lands below the top bar.
+  // A target's page position, moved by its data-offset (px): "#try" lands below the top bar.
   const anchorTop = (target) => target.getBoundingClientRect().top + scrollY + Number(target.dataset.offset ?? 0);
-  const scrollTo = (target) => (lenis ? lenis.scrollTo(anchorTop(target), { duration: 1.6 }) : window.scrollTo({ top: anchorTop(target) }));
-  const probar = $('#probar');
+  const navFlight = { until: 0, chapter: null };
+  const scrollTo = (target) => {
+    const destChapter = target.closest?.('.chapter') ?? null;
+    if (destChapter) {
+      navFlight.until = performance.now() + 1650;
+      navFlight.chapter = destChapter;
+    }
+    return lenis ? lenis.scrollTo(anchorTop(target), { duration: 1.6 }) : window.scrollTo({ top: anchorTop(target) });
+  };
+  on(window, 'wheel', () => (navFlight.until = 0), { passive: true });
+  on(window, 'touchstart', () => (navFlight.until = 0), { passive: true });
+  const probar = $('#try');
 
   for (const link of $$('[data-warm]')) {
     const warm = () => prefetch(link.dataset.warm);
@@ -319,7 +332,7 @@ export function mount(root) {
     onRobotProgress(({ done, total, compiling, policy }) => {
       $('.boot-files').textContent = `${done}/${total}`;
       $('.boot-bar').style.width = `${(100 * done) / total}%`;
-      $('.boot-line').textContent = policy ? 'cargando la política entrenada' : compiling ? 'armando el G1: 29 articulaciones, 33,3 kg' : 'cargando el mundo de física';
+      $('.boot-line').innerHTML = T(policy ? 'boot.policy' : compiling ? 'boot.compiling' : 'boot.world');
     }),
   );
   if (robotView()) film.classList.add('ready');
@@ -340,6 +353,10 @@ export function mount(root) {
   const layout = { tops: [], gymTop: 0, gymStep: 1 };
   const chapterAt = (y) => chapters[layout.tops.findLastIndex((top) => top <= y)] ?? chapters[0];
   function targetShot() {
+    if (navFlight.chapter && performance.now() < navFlight.until) {
+      const dest = SHOTS[navFlight.chapter.dataset.shot] ?? SHOTS.close;
+      return narrow() ? narrowShot(dest) : dest;
+    }
     const mid = scrollY + innerHeight * 0.5;
     let from = chapters[0];
     let to = chapters[0];
@@ -365,14 +382,41 @@ export function mount(root) {
     return narrow() ? narrowShot(blend) : blend;
   }
 
+  // Click-and-drag camera orbiting on the landing background so the user can rotate around the robot.
+  const userOrbit = { az: 0, el: 0, dragging: false, lastX: 0, lastY: 0 };
+  on(window, 'pointerdown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest?.('a, button, input, select, label, video, .panel, .topbar, .try, .sim-readout, .phone-arrows')) return;
+    userOrbit.dragging = true;
+    userOrbit.lastX = e.clientX;
+    userOrbit.lastY = e.clientY;
+    document.body.style.cursor = 'grabbing';
+  });
+  on(window, 'pointermove', (e) => {
+    if (!userOrbit.dragging) return;
+    const dx = e.clientX - userOrbit.lastX;
+    const dy = e.clientY - userOrbit.lastY;
+    userOrbit.lastX = e.clientX;
+    userOrbit.lastY = e.clientY;
+    userOrbit.az -= dx * 0.35;
+    userOrbit.el = Math.max(-10, Math.min(28, userOrbit.el + dy * 0.22));
+  });
+  const endOrbitDrag = () => {
+    if (!userOrbit.dragging) return;
+    userOrbit.dragging = false;
+    document.body.style.cursor = '';
+  };
+  on(window, 'pointerup', endOrbitDrag);
+  on(window, 'pointercancel', endOrbitDrag);
+
   function directCamera(v) {
     const goal = targetShot();
     const k = reducedMotion ? 1 : 0.06;
     for (const key of Object.keys(shot)) shot[key] += (goal[key] - shot[key]) * k;
     v.viewer.followTau = reducedMotion ? 0 : shot.follow;
     const { camera, controls } = v.viewer;
-    const az = (shot.az * Math.PI) / 180;
-    const el = (shot.el * Math.PI) / 180;
+    const az = ((shot.az + userOrbit.az) * Math.PI) / 180;
+    const el = (Math.max(-5, Math.min(42, shot.el + userOrbit.el)) * Math.PI) / 180;
     // The camera is level and the picture is shifted instead (an architect's shift lens): a camera
     // tilted down to the aim made every vertical away from the image's center lean, and with the
     // robot slid to the side for the words (shift) and running ahead of the camera in the walk, the
@@ -421,8 +465,8 @@ export function mount(root) {
   }
   // Right after view.push(). Smaller in the hero, whose camera stands 1.35 m from the robot
   // instead of 3.7 m.
-  function drawPush() {
-    if (marks && view) marks.arrow.point(view, mode === 'gym' ? 1 : 0.6);
+  function drawPush(newtons = PUSH_N) {
+    if (marks && view) marks.arrow.point(view, (mode === 'gym' ? 1 : 0.6) * Math.max(0.5, Math.min(1.5, newtons / PUSH_N)));
   }
   function updateMarks() {
     if (!marks) return;
@@ -434,14 +478,19 @@ export function mount(root) {
   }
 
   // ---- What the robot does in each chapter ----
-  let level = FINAL_LEVEL; // the policy it has (robot-host loads the final one)
+  let level = null; // checked against view.sim.policy.id so returning from another robot always reloads G1
   let queue = Promise.resolve();
   function useLevel(id) {
     queue = queue
       .then(async () => {
-        if (gone || !view || level === id) return;
+        if (gone || !view || (level === id && view.sim?.policy?.id === id && view.sim?.policy?.robot === 'unitree_g1')) return;
+        const wasNonG1 = view.sim?.policy?.robot && view.sim.policy.robot !== 'unitree_g1';
         const { onnx, json } = policyUrls(id);
         await view.loadPolicy(onnx, json);
+        if (wasNonG1 && view.sim) {
+          const [px, py] = view.sim.bodyPosition('pelvis');
+          view.viewer.controls.target.set(px, view.viewer.targetHeight, -py);
+        }
         level = id;
       })
       .catch((error) => console.error(error));
@@ -467,9 +516,9 @@ export function mount(root) {
       // at the end instead and walks backward to where the story began (updateWalk).
       walk.t = walk.dir < 0 ? walkDuration() : 0;
       video.currentTime = walk.t;
-      // plantFeet: the retargeted path is shorter than the robot's stride, so without it the foot on
-      // the floor slid backward (0,35 m/s) and the walk read as a moonwalk (physics/src/motion.js).
-      if (token === modeToken && motion) view.playClip(motion, { plantFeet: true });
+      // plantFeet 'auto', as Simulations plays it: GVHMR's path already matches the stride. Forcing it
+      // was for MediaPipe's walk, whose path was too short and slid the planted foot backward.
+      if (token === modeToken && motion) view.playClip(motion);
     } else if (kind === 'gym') {
       await useLevel(gymLevel());
       if (token === modeToken) startGymRun();
@@ -481,15 +530,20 @@ export function mount(root) {
       if (token === modeToken && (previous !== 'gym' || fallen)) view.stop();
     }
   }
-  const modeAt = () => chapterAt(scrollY + innerHeight * 0.5).dataset.mode ?? 'stand';
+  const modeAt = () => {
+    if (navFlight.chapter && performance.now() < navFlight.until) {
+      return navFlight.chapter.dataset.mode ?? 'stand';
+    }
+    return chapterAt(scrollY + innerHeight * 0.5).dataset.mode ?? 'stand';
+  };
 
   // Hero: the robot stands on its own with the trained policy; a push shows it catching itself.
   // fallenAt: when the robot was first seen on the floor (0 while standing), to stand it up again.
   const hero = { pushes: 0, falls: 0, pushedAt: 0, fallen: false, fallenAt: 0 };
   const stateEl = $('.hud .state');
-  const say = (state, text) => {
+  const say = (state, key, vars) => {
     stateEl.dataset.state = state;
-    stateEl.querySelector('span').textContent = text;
+    stateEl.querySelector('span').innerHTML = T(key, vars);
   };
   let heroTimer = 0;
   // The hero's push is the one the trained robot holds, spaced as in training (push.js); the
@@ -505,7 +559,7 @@ export function mount(root) {
     hero.pushedAt = performance.now();
     hero.fallen = false;
     $('[data-hud="pushes"]').textContent = hero.pushes;
-    say('push', `Empujón de ${STANDING_PUSH_N} N · la política lo atrapa`);
+    say('push', 'hud.push', { n: STANDING_PUSH_N });
     for (const button of $$('.hero-push')) {
       button.classList.remove('kick');
       void button.offsetWidth; // restart the animation
@@ -513,7 +567,7 @@ export function mount(root) {
     }
     clearTimeout(heroTimer);
     heroTimer = setTimeout(() => {
-      if (!hero.fallen) say('stand', 'Física real · de pie con su política');
+      if (!hero.fallen) say('stand', 'hud.stand');
     }, AFTER_PUSH_S * 1000);
   }
   // A robot on the floor in the hero, whatever put it there (a push the policy missed, or the page
@@ -531,13 +585,13 @@ export function mount(root) {
         hero.fallen = true; // the policy misses some pushes (training/README.md): say so
         hero.falls += 1;
         $('[data-hud="falls"]').textContent = hero.falls;
-        say('fall', 'Esta vez se cayó. También pasa: se levanta y lo vuelve a intentar');
+        say('fall', 'hud.fall');
       }
     } else if (now - hero.fallenAt > GYM_RESTART_S * 1000) {
       view.reset();
       hero.fallenAt = 0;
       hero.fallen = false;
-      say('stand', 'Física real · de pie con su política');
+      say('stand', 'hud.stand');
     }
   }
   $$('.hero-push').forEach((button) => on(button, 'click', pushHero));
@@ -587,16 +641,34 @@ export function mount(root) {
   // falls (~1,1 s), the others take their first push. Up, the top bar's links and the axis move freely.
   const gymEl = $('.gym');
   const gymPanel = gymEl.querySelector('.sticky');
-  const gym = { since: 0, lastPush: 0, fallen: false, loading: false, shownAt: 0 };
+  const gym = { since: 0, lastPush: 0, fallen: false, loading: false, shownAt: 0, forceN: PUSH_N };
+  const forceSlider = $('.gym-force-slider');
+  const forceLabel = $('[data-gym="force"]');
+  if (forceSlider) {
+    on(forceSlider, 'input', () => {
+      gym.forceN = Number(forceSlider.value) || PUSH_N;
+      if (forceLabel) forceLabel.textContent = `${gym.forceN} N`;
+      shownStage = -1;
+      showGymStage();
+    });
+  }
+  const simInfoBtn = $('.sim-info-btn');
+  if (simInfoBtn) {
+    on(simInfoBtn, 'click', (event) => {
+      event.stopPropagation();
+      simInfoBtn.classList.toggle('open');
+    });
+    on(document, 'click', () => simInfoBtn.classList.remove('open'));
+  }
   // A push by hand (space or the panel's button) on the checkpoint on screen. The Gym's own pushes
   // count from it, so two never land on top of each other.
   function pushGym() {
     if (!view || mode !== 'gym' || !gym.since || gym.fallen || gym.loading) return;
     gym.lastPush = pushed.lastT = view.sim.data.time;
     gym.shownAt ||= performance.now() + GYM_SHOWN_PUSH_S * 1000;
-    view.push();
-    drawPush();
-    $('[data-gym="status"]').textContent = `empujón de ${PUSH_N} N`;
+    view.push(undefined, gym.forceN);
+    drawPush(gym.forceN);
+    $('[data-gym="status"]').innerHTML = T('gym.pushed', { n: gym.forceN });
   }
   $$('.gym-push').forEach((button) => on(button, 'click', pushGym));
   const GYM_SHOWN_FALL_S = 0.4; // after a fall, a moment on the floor before the scroll is let go
@@ -695,6 +767,8 @@ export function mount(root) {
   updateArrows();
 
   let shownStage = -1;
+  // Numbers written as text (the step counter) take the new language's decimal mark on a switch.
+  cleanups.push(onLang(() => (shownStage = -1)));
   function showGymStage() {
     const stage = gymStage();
     if (stage === shownStage) return;
@@ -707,8 +781,18 @@ export function mount(root) {
       });
     }
     $('.axis-fill').style.width = $$('.axis-stop')[stage].style.getPropertyValue('--at');
-    $('[data-gym="text"]').textContent = current.text;
-    $('[data-gym="numbers"]').innerHTML = `<span><b>${current.up}</b> de pie, de 20 s</span><span><b>${current.pushes}</b> empujones de ${PUSH_N} N</span>`;
+    $('[data-gym="text"]').innerHTML = T(`stage.${stage}.text`);
+    $('[data-gym="numbers"]').innerHTML = `<span>${T('gym.upOf', { s: (l) => `${fmt(current.up, current.up % 1 ? 1 : 0)(l)} s` })}</span><span>${T('gym.pushesOf', { held: (l) => T_OF(current.pushes, l), n: gym.forceN })}</span>`;
+    const capEl = $('[data-gym="force-cap"]');
+    const zoneEl = $('[data-gym="force-zone"]');
+    if (capEl) {
+      capEl.innerHTML = current.maxN > 0 ? T('gym.capHold', { label: current.label, max: current.maxN }) : T('gym.capZero');
+      capEl.dataset.over = String(gym.forceN > current.maxN);
+    }
+    if (zoneEl) {
+      const pct = current.maxN <= 0 ? 0 : Math.min(100, Math.max(0, ((current.maxN - 50) / 450) * 100));
+      zoneEl.style.width = `${pct}%`;
+    }
     // The big number counts up (or back) to this stage's steps.
     const shown = { value: Number($('[data-gym="steps"]').dataset.value ?? 0) };
     gsap.to(shown, {
@@ -718,7 +802,12 @@ export function mount(root) {
       onUpdate: () => {
         const el = $('[data-gym="steps"]');
         el.dataset.value = shown.value;
-        el.textContent = shown.value >= 1e6 ? `${num(shown.value / 1e6, shown.value < 1e7 ? 1 : 0)} M` : steps(shown.value);
+        el.textContent =
+          shown.value >= 9.95e8
+            ? `${fmt(shown.value / 1e9, 0)(lang())} B`
+            : shown.value >= 1e6
+              ? `${fmt(shown.value / 1e6, shown.value < 1e7 ? 1 : 0)(lang())} M`
+              : fmtInt(shown.value)(lang());
       },
     });
   }
@@ -728,7 +817,7 @@ export function mount(root) {
     const [x, y] = view.sim.bodyPosition('pelvis');
     marks?.ring.position.set(x, marks.ring.position.y, -y);
     const t = view.sim.data.time;
-    $('[data-gym="status"]').textContent = 'en vivo'; // not the last checkpoint's fall
+    $('[data-gym="status"]').innerHTML = T('gym.live'); // not the last checkpoint's fall
     // The first push comes at GYM_FIRST_PUSH_S, then every GYM_PUSH_EVERY_S.
     Object.assign(gym, { since: t || 1e-6, lastPush: t - (GYM_PUSH_EVERY_S - GYM_FIRST_PUSH_S), fallen: false });
   }
@@ -748,20 +837,20 @@ export function mount(root) {
     if (!gym.since || gym.fallen) return;
     const now = view.sim.data.time;
     const up = now - gym.since;
-    $('[data-gym="up"]').textContent = `${num(up, 1)} s`;
+    $('[data-gym="up"]').textContent = `${fmt(up, 1)(lang())} s`;
     if (view.sim.bodyPosition('pelvis')[2] < FALLEN_PELVIS_M) {
       gym.fallen = true;
       gym.shownAt ||= performance.now() + GYM_SHOWN_FALL_S * 1000;
-      $('[data-gym="status"]').textContent = `se cayó · lo levantamos`;
+      $('[data-gym="status"]').innerHTML = T('gym.fell');
       setTimeout(() => mode === 'gym' && level === wanted && startGymRun(), GYM_RESTART_S * 1000);
       return;
     }
     if (now - gym.lastPush > GYM_PUSH_EVERY_S) {
       gym.lastPush = pushed.lastT = now;
       gym.shownAt ||= performance.now() + GYM_SHOWN_PUSH_S * 1000;
-      view.push();
-      drawPush();
-      $('[data-gym="status"]').textContent = `empujón de ${PUSH_N} N`;
+      view.push(undefined, gym.forceN);
+      drawPush(gym.forceN);
+      $('[data-gym="status"]').innerHTML = T('gym.pushed', { n: gym.forceN });
     }
   }
 
@@ -816,12 +905,26 @@ export function mount(root) {
   // A veil per chapter ended in a hard line where the chapter ended; one veil for the whole page,
   // eased toward each chapter's side, leaves no edge. On phones the words sit low: a floor instead.
   const washEl = $('.film-wash');
+  const hudEl = $('.film-hud');
+  const navLinks = $$('.topnav a');
+  let activeNavHref = '';
   // The hero's title sits low on the left, over the street (landing/city.js).
   const WASH = { hero: [0.85, 0], capture: [1, 0], gym: [1, 0], policy: [0, 1], close: [0, 0] };
   const wash = { left: 0, right: 0, floor: 0 };
   const washed = { left: '', right: '', floor: '' }; // what the veil has now: write only changes
   function updateWash() {
     const chapter = chapterAt(scrollY + innerHeight * 0.5);
+    const wantedHref = `#${chapter.id}`;
+    if (wantedHref !== activeNavHref) {
+      activeNavHref = wantedHref;
+      for (const link of navLinks) {
+        const isCurrent = link.getAttribute('href') === wantedHref;
+        link.classList.toggle('active', isCurrent);
+        if (isCurrent) link.setAttribute('aria-current', 'true');
+        else link.removeAttribute('aria-current');
+      }
+      if (hudEl) hudEl.classList.toggle('is-closing', chapter.dataset.shot === 'close');
+    }
     const [left, right] = WASH[chapter.dataset.shot] ?? [0, 0];
     const goal = narrow() ? { left: 0, right: 0, floor: chapter.dataset.shot === 'close' ? 0 : 1 } : { left, right, floor: 0 };
     const k = reducedMotion ? 1 : 0.08;
@@ -839,7 +942,7 @@ export function mount(root) {
   function updateReadout(now) {
     if (now - readAt < READOUT_EVERY_MS) return;
     readAt = now;
-    $('[data-sim="time"]').textContent = num(view.sim.data.time, 1);
+    $('[data-sim="time"]').textContent = fmt(view.sim.data.time, 1)(lang());
     $('[data-sim="contacts"]').textContent = view.sim.data.ncon;
   }
 
@@ -890,15 +993,30 @@ export function mount(root) {
       undressCity = dressCity(view.viewer.scene, view.viewer.renderer);
       marks = makeMarks(view.viewer.scene);
       telemetry = dressTelemetry(view);
-      $('[data-sim="rates"]').textContent = `MuJoCo · física ${Math.round(1 / view.sim.model.opt.timestep)} Hz · política ${DECISIONS_PER_S} Hz`;
+      $('[data-sim="rates"]').innerHTML = T('sim.rates', { hz: Math.round(1 / view.sim.model.opt.timestep), policy: DECISIONS_PER_S });
       film.classList.add('ready');
       $$('.hero-push, .gym-push').forEach((button) => (button.disabled = false));
+      warmUp();
     },
     (error) => {
-      $('.boot-line').textContent = 'No se pudo cargar el robot. Recarga la página.';
+      $('.boot-line').innerHTML = T('boot.failed');
       console.error(error);
     },
   );
+
+  // While the reader is still on the hero, do the work the next chapters would otherwise do on
+  // arrival: the skeleton's renderer, and the Gym's checkpoints downloaded into the browser's cache
+  // (loading one then only builds its network, instead of waiting on the network mid-scroll).
+  function warmUp() {
+    const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 200));
+    idle(buildSkeleton, { timeout: 1500 });
+    idle(() => {
+      for (const stage of GYM_STAGES) {
+        const { onnx, json } = policyUrls(stage.level);
+        for (const url of [onnx, json]) if (url) fetch(url).catch(() => {});
+      }
+    }, { timeout: 3000 });
+  }
 
   // ---- Scroll choreography (GSAP) ----
   const ctx = gsap.context(() => {
@@ -924,33 +1042,39 @@ export function mount(root) {
     // Gym: its words come in once; the stages then follow the scroll (gymStage) and stop it (gymGate).
     gsap.from('.gym-caption > *', { opacity: 0, y: 30, stagger: 0.08, duration: 0.6, scrollTrigger: { trigger: '.gym', start: 'top 60%', toggleActions: 'play none none none' } });
 
-    // Policy: the numbers come in one by one.
-    gsap.from('.policy-caption h2, .policy-caption .product, .policy-lede', { opacity: 0, y: 30, stagger: 0.1, scrollTrigger: { trigger: '.policy', start: 'top 60%', end: 'top 10%', scrub: true } });
-    gsap.from('.specs li', { opacity: 0, x: 40, stagger: 0.25, scrollTrigger: { trigger: '.policy', start: 'top top', end: '60% bottom', scrub: true } });
+    // Policy: card rises in cleanly on arrival so all 4 specs and CTA button are immediately visible.
+    gsap.from('.policy-caption > *', { opacity: 0, y: 24, stagger: 0.06, duration: 0.55, scrollTrigger: { trigger: '.policy', start: 'top 65%', toggleActions: 'play none none none' } });
 
     // Closing: the page closes over the film like a curtain, and the manifesto rises word by word.
     gsap.fromTo('.film-shade', { '--shade': 0 }, { '--shade': 0.88, immediateRender: false, scrollTrigger: { trigger: '.closing', start: 'top bottom', end: 'top 30%', scrub: true } });
     const words = $('.manifesto');
-    words.innerHTML = words.textContent.split(' ').map((w) => `<span class="w"><span>${w}</span></span>`).join(' ');
+    // Word by word, line by line: the manifesto's <br> (one sentence per line) stays where it was.
+    const wrapWords = (text) => text.split(' ').map((w) => `<span class="w"><span>${w}</span></span>`).join(' ');
+    for (const span of words.querySelectorAll('.t')) span.innerHTML = span.innerHTML.split(/<br\s*\/?>/).map((line) => wrapWords(line.trim())).join('<br>');
     gsap.from('.manifesto .w > span', { yPercent: 110, stagger: 0.04, ease: 'power3.out', scrollTrigger: { trigger: '.closing', start: 'top 80%', end: 'top 10%', scrub: true } });
     // Done by the time the closing's top reaches the top of the screen, before "Probar" lands.
-    gsap.from('.closing-text, .try', { opacity: 0, y: 40, stagger: 0.06, scrollTrigger: { trigger: '.closing', start: 'top 70%', end: 'top top', scrub: true } });
-    gsap.from('.milestones li', { opacity: 0, y: 40, stagger: 0.06, scrollTrigger: { trigger: '.progress-track', start: 'top 95%', end: 'top 60%', scrub: true } });
-    // The progress line fills up to "Entrenando" (the middle milestone) as it scrolls in.
-    gsap.fromTo('.track-fill', { scale: 0 }, { scale: 1, ease: 'none', scrollTrigger: { trigger: '.progress-track', start: 'top 85%', end: 'top 45%', scrub: true } });
+    // Animate the .tries container rather than individual .try links so GSAP never fights CSS hover states.
+    gsap.from('.closing-text, .tries', { opacity: 0, y: 40, stagger: 0.08, scrollTrigger: { trigger: '.closing', start: 'top 70%', end: 'top top', scrub: true } });
   }, root);
 
-  // The skeleton of Capture is built when the chapter comes near.
-  const skeletonObserver = new IntersectionObserver(([entry]) => {
-    if (entry.isIntersecting && !skeleton && WALK) {
-      skeleton = new SkeletonView($('.skeleton-canvas'));
-      skeleton.controls.enabled = false;
-      // Seen from the side the video was filmed from (the PoseClip's z points to the phone), so the
-      // skeleton walks the same way as the person and the far arm is the dimmed one behind the body.
-      skeleton.camera.position.set(0, 1.1, 3.4);
-      fetchClip(WALK).then((clip) => !gone && skeleton.setClip(clip), console.error);
-    }
-  }, { rootMargin: '400px' });
+  // The skeleton of Capture: a second WebGL renderer, whose context and shaders took ~1 s to set up
+  // the moment Capture came near, a visible freeze mid-scroll. Now it is built while the page is
+  // idle after the robot loads (warmUp), and drawn once there so its shaders are compiled before
+  // anyone sees it; the observer is only the fallback for someone who scrolls there first.
+  function buildSkeleton() {
+    if (skeleton || gone || !WALK) return;
+    skeleton = new SkeletonView($('.skeleton-canvas'));
+    skeleton.controls.enabled = false;
+    // Seen from the side the video was filmed from (the PoseClip's z points to the phone), so the
+    // skeleton walks the same way as the person and the far arm is the dimmed one behind the body.
+    skeleton.camera.position.set(0, 1.1, 3.4);
+    fetchClip(WALK).then((clip) => {
+      if (gone) return;
+      skeleton.setClip(clip);
+      skeleton.render();
+    }, console.error);
+  }
+  const skeletonObserver = new IntersectionObserver(([entry]) => entry.isIntersecting && buildSkeleton(), { rootMargin: '400px' });
   skeletonObserver.observe(captureEl);
 
   // The top bar is clear over the hero and turns solid once the hero has scrolled past its bottom

@@ -6,3 +6,5 @@ node_modules/
 .claude/settings.local.json
 dist/
 build/
+.wrangler/
+yc/videos/

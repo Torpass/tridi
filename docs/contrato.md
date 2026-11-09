@@ -58,6 +58,66 @@ Lo produce `data/` (cámara en vivo o video subido). Lo consumen el retargeting,
 
 Para entrenar se guarda también como `.npz` con la misma información (`joints`: `[frames, 33, 4]`).
 
+### `PoseClip` v2: cuerpo SMPL-X, manos y contactos *(2026-11-05)*
+
+Lo produce la captura 2.0 (`data/capture2/to_poseclip.py`, fusionando GVHMR y WiLoR). Es compatible hacia atrás con v1: conserva `joints` (los 33 puntos de MediaPipe derivados de SMPL-X, con las puntas de meñique, índice y pulgar `17..22` tomadas de las manos cuando hay WiLoR) para que cualquier lector v1 siga funcionando sin cambios.
+
+```jsonc
+{
+  "id": "clip_dedos-01-gvhmr",
+  "version": 2,                            // v1 no lo trae
+  "capture": "gvhmr+wilor" | "gvhmr",      // qué modelos armaron el clip
+  "body_model": "smplx",
+  "betas": [0.12, -0.04, ...],             // 10 parámetros de forma del sujeto en SMPL-X (media del clip)
+  "camera": {
+    "static": false,                       // true si la cámara no se movió (--static)
+    "f_mm": 24                             // focal equivalente en 35 mm (24 por defecto)
+  },
+  "source": "upload",
+  "source_file": "dedos-01.mp4",
+  "fps": 29.97,
+  "skeleton": "mediapipe33",
+  "units": "m",                            // metros, y arriba, z hacia la cámara
+  "origin": "hips",                        // centro de las caderas del primer frame = (0, 0, 0)
+  "subject": { "track_id": 0, "selected_by": "auto" },
+  "frames": [
+    {
+      "t": 0.0,
+      "joints": [[x, y, z, visibility], ...],  // 33 entradas
+      "hands": {                           // opcional; 21 puntos por mano vista, en el mismo espacio que joints
+        "left": null,                      // null si no se vio o no coincidió con la muñeca del sujeto
+        "right": [[x, y, z], ...]          // 0 muñeca, 1-4 pulgar, 5-8 índice, 9-12 mayor, 13-16 anular, 17-20 meñique
+      },
+      "hands_conf": { "left": 0.0, "right": 0.92 },
+      "contacts": { "left_foot": true, "right_foot": true }
+    }
+  ],
+  "quality": {
+    "valid_ratio": 1.0,
+    "hands_ratio": { "left": 0.0, "right": 0.9 }  // fracción de cuadros con cada mano del sujeto vista
+  }
+}
+```
+
+ Reglas y umbrales de la fusión:
+
+- **Asociación muñeca-mano (`MAX_WRIST_IMAGE_DIST = 0.30`):** WiLoR detecta la mano más confiable de cada lado en la imagen, que en un video con varias personas puede ser de otro. Se proyectan la muñeca de GVHMR (`incam`) y la de WiLoR al plano de imagen normalizado por el lado largo (`f_mm / 36` en GVHMR, `5000 / 256` en WiLoR); si distan más de 0,30 del lado largo (medido en el set de prueba: el sujeto da p95 ≤ 0,13 y máximo 0,27 saludando rápido), esa mano se descarta en ese cuadro (`conf = 0`).
+- **Muñeca y dedos en SMPL-X:** donde la mano pasa el filtro, la rotación de la muñeca en `body_pose` (`left_wrist` = articulación 20, `right_wrist` = 21) se reemplaza por la orientación de WiLoR relativa al codo de GVHMR en cámara (`R_elbow⁻¹ · R_wrist_wilor`), y `left_hand_pose` / `right_hand_pose` reciben las 15 articulaciones de MANO (`flat_hand_mean = True`; la mano izquierda se espeja en `x` invirtiendo `y` y `z` del vector de rotación porque WiLoR predice sobre recortes espejados).
+- **Contacto de pies:** un pie está apoyado (`left_foot`, `right_foot`) cuando su talón o punta está a ≤ 2 cm del piso del clip y su velocidad horizontal es ≤ 0,15 m/s (los mismos umbrales de `physics/src/motion.js` y `training/balance.py`).
+
+En el `.npz` (`clip_<id>.npz`), además de `joints`, `t`, `valid`, `frame_index` y `meta`, v2 guarda los parámetros SMPL-X ya girados y centrados en el espacio del contrato (`float32`):
+
+| Arreglo | Forma | Qué es |
+| --- | --- | --- |
+| `smplx_betas` | `[10]` | forma del cuerpo SMPL-X del sujeto |
+| `smplx_transl` | `[F, 3]` | traslación en el espacio del contrato (`y` arriba, `z` a la cámara, caderas del cuadro 0 en 0) |
+| `smplx_global_orient` | `[F, 3]` | orientación global (axis-angle) en el espacio del contrato |
+| `smplx_body_pose` | `[F, 63]` | 21 articulaciones del cuerpo (axis-angle), con las muñecas de WiLoR donde se vieron |
+| `smplx_left_hand_pose`, `smplx_right_hand_pose` | `[F, 45]` | 15 articulaciones por mano (axis-angle, `flat_hand_mean = True`) |
+| `hand_joints` | `[F, 2, 21, 3]` | los 21 puntos 3D por mano (`0` izquierda, `1` derecha) en el espacio del contrato |
+| `hand_conf` | `[F, 2]` | confianza de cada mano por cuadro (`0` si no se vio o no era del sujeto) |
+| `foot_contact` | `[F, 2]` | apoyo de cada pie (`bool`: `0` izquierdo, `1` derecho) |
+
 ## `RobotMotion`: el clip pasado al robot
 
 Lo produce el retargeting en `physics/`. Ángulos de cada articulación del robot (`qpos` de MuJoCo) por frame.
@@ -94,13 +154,14 @@ Lo produce `training/`. Lo corre la web con onnxruntime-web junto a MuJoCo WASM.
 | `task` | `"stand"` (de pie, aguanta empujones) o `"mimic"` (imita un `RobotMotion`; en `training.ppo` es `--task mimic`, o su nombre viejo `walk`) | Lo escribe `training/export.py`. En políticas viejas sin el campo, `obs_dim` las distingue: 93 es `stand`, otro valor es `mimic` |
 | `motion` | El `clip_id` del `RobotMotion` que imita (solo `mimic`) | Lo escribe `training/export.py` |
 | `lookahead_s` | Qué tan adelante muestra la observación la referencia, en segundos (solo `mimic`) | Lo escribe `training/export.py`: `[0.1, 0.25]` |
+| `sense_velocity` | `true` si la observación de `mimic` incluye al final la velocidad lineal de la pelvis en su propio marco (`R^T qvel[0:3]`, 3 números más: `obs_dim = 193` en el G1) | Lo escribe `training/export.py` cuando la política se entrenó con `--sense-velocity` |
 | `worlds` | Los ids de los mundos con que se entrenó (ver "Mundos") | Lo escribe `training/export.py`. `["plano"]` hasta que la imitación sortee mundos (ENT-3) |
 | `followed_s`, `duration_s` | Cuántos segundos del clip sigue este checkpoint desde el principio, sin caerse ni alejarse más de 0,6 m del recorrido, en el mundo plano y sin ruido (como `training/evaluate_walk.py`), y cuánto dura el clip (solo `mimic`) | Lo escribe `training/export.py` al exportar cada checkpoint |
 
 La observación de cada tipo, número por número:
 
 - `stand` (93): la tabla de [`training/README.md`](../training/README.md).
-- `mimic` (190): los 93 de `stand`; los ángulos de la referencia a 20 ms menos la pose de pie (29); la velocidad de la pelvis de la referencia en el marco de la pelvis (3); la altura de la pelvis de la referencia menos la actual (1); y por cada valor de `lookahead_s`, los ángulos de la referencia en ese instante menos la pose de pie (29) y la posición de su pelvis menos la actual, en el marco de la pelvis (3). El detalle está en `MimicEnv.observe()` de `training/imitate.py`. La salida ya trae sumada la pose de referencia: se escribe tal cual en `data.ctrl`.
+- `mimic` (190, o 193 con `sense_velocity: true`): los 93 de `stand`; los ángulos de la referencia a 20 ms menos la pose de pie (29); la velocidad de la pelvis de la referencia en el marco de la pelvis (3); la altura de la pelvis de la referencia menos la actual (1); por cada valor de `lookahead_s`, los ángulos de la referencia en ese instante menos la pose de pie (29) y la posición de su pelvis menos la actual, en el marco de la pelvis (3); y, si `sense_velocity` es `true`, la velocidad lineal de la pelvis del propio robot en el marco de la pelvis (`R^T qvel[0:3]`, 3 números en m/s). El detalle está en `MimicEnv.observe()` de `training/imitate.py`. La salida ya trae sumada la pose de referencia: se escribe tal cual en `data.ctrl`.
 
 ## API del servidor de video (`data/server.py`)
 

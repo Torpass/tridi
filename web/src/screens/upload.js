@@ -6,8 +6,10 @@ import { chooseSubject, fetchClip, firstFrameUrl, UploadError, uploadVideo, watc
 import { createVideoOverlay } from '../video-overlay.js';
 import { addUserClip } from '../preloaded.js';
 import { cannotTrain, mountTrainBox, startTraining, trainBoxHTML } from '../training.js';
+import { escapeHtml } from '../i18n.js';
+import { A, T } from './strings/upload.js';
 
-export const title = 'Subir un video';
+export { title } from './strings/upload.js';
 
 // The server's limits (docs/contrato.md): checked here first so nobody waits for an upload
 // that will be refused.
@@ -16,10 +18,10 @@ const MAX_SECONDS = 30;
 const VIDEO_TYPES = /\.(mp4|mov|m4v|webm|zip)$/i;
 
 const STAGES = [
-  ['upload', 'Subir el video'],
-  ['tracking', 'Buscar a las personas'],
-  ['pose3d', 'Calcular cómo se mueve'],
-  ['done', '¡Listo!'],
+  ['upload', 'stageUpload'],
+  ['tracking', 'stageTracking'],
+  ['pose3d', 'stagePose'],
+  ['done', 'stageDone'],
 ];
 const STAGE_ORDER = { waiting: 1, tracking: 1, pose3d: 2, done: 3, failed: 3 };
 
@@ -27,8 +29,8 @@ const STAGE_ORDER = { waiting: 1, tracking: 1, pose3d: 2, done: 3, failed: 3 };
 // shows where it is. { jobId, filename, job, error, clips }
 let session = null;
 
-const describeError = (error) =>
-  error instanceof UploadError ? error.message : 'Se cortó la conexión con el servidor. Revisa tu internet e intenta de nuevo.';
+// Markup: the server's own message (escaped; it comes in Spanish) or ours in every language.
+const describeError = (error) => (error instanceof UploadError ? escapeHtml(error.message) : T('lost'));
 
 function videoSeconds(file) {
   return new Promise((resolve) => {
@@ -47,73 +49,73 @@ export function mount(root, { api }) {
   root.innerHTML = `
     <section class="page upload" data-step="checking">
       <header class="page-head">
-        <a class="back" href="#/" aria-label="Volver al inicio">←<span class="only-wide">&nbsp;Volver al inicio</span></a>
-        <h1>Sube un video</h1>
+        <a class="back" href="#/" ${A({ 'aria-label': 'back' })}>←<span class="only-wide">&nbsp;${T('back')}</span></a>
+        <h1>${T('head')}</h1>
       </header>
       <div class="upload-grid">
         <section class="pane example-pane">
-          <p class="pane-label"><span class="only-wide">Así se ve un buen video: de perfil y con el cuerpo entero</span><span class="only-narrow">Buen video: de perfil, cuerpo entero</span></p>
+          <p class="pane-label"><span class="only-wide">${T('exampleWide')}</span><span class="only-narrow">${T('exampleNarrow')}</span></p>
         </section>
         <div class="upload-panel">
-          <div data-show="checking"><p class="lead">Conectando con Tridi…</p></div>
+          <div data-show="checking"><p class="lead">${T('connecting')}</p></div>
 
           <div data-show="pick">
-            <p class="lead">Tridi aprende de una persona moviéndose: caminando, bailando o corriendo.</p>
+            <p class="lead">${T('pickLead')}</p>
             <ul class="tips">
-              <li><strong>Graba de perfil y con el cuerpo entero en cuadro.</strong> De frente, el robot no avanza.</li>
-              <li>Hasta ${MAX_SECONDS} segundos y ${MAX_BYTES / 1024 / 1024} MB por video.</li>
-              <li>Si hay varias personas, después tocas la que quieres.</li>
+              <li>${T('tipSide')}</li>
+              <li>${T('tipLimits', { seconds: MAX_SECONDS, mb: MAX_BYTES / 1024 / 1024 })}</li>
+              <li>${T('tipPeople')}</li>
             </ul>
             <label class="dropzone">
               <input type="file" accept="video/*,.zip" hidden />
-              <strong>Elegir un video</strong>
-              <span>o arrástralo aquí</span>
+              <strong>${T('pickButton')}</strong>
+              <span>${T('drop')}</span>
             </label>
             <p class="pick-error error" aria-live="polite"></p>
           </div>
 
           <div data-show="uploading">
-            <h2>Subiendo tu video</h2>
+            <h2>${T('uploading')}</h2>
             <div class="track big"><div class="bar upload-bar"></div></div>
             <p class="upload-percent">0 %</p>
-            <button class="cancel" type="button">Cancelar</button>
+            <button class="cancel" type="button">${T('cancel')}</button>
           </div>
 
           <div data-show="processing">
-            <h2>Tridi está mirando tu video</h2>
-            <ol class="stages">${STAGES.map(([id, text]) => `<li data-stage="${id}">${text}</li>`).join('')}</ol>
+            <h2>${T('watching')}</h2>
+            <ol class="stages">${STAGES.map(([id, text]) => `<li data-stage="${id}">${T(text)}</li>`).join('')}</ol>
             <div class="track big"><div class="bar stage-bar"></div></div>
             <p class="queue"></p>
             <div class="chooser" hidden>
-              <p><strong>¿Es esta la persona?</strong> Si no, toca a la que quieres.</p>
-              <div class="frame"><img alt="Primer cuadro del video con las personas encontradas" /><svg></svg></div>
+              <p>${T('isThis')}</p>
+              <div class="frame"><img ${A({ alt: 'frameAlt' })} /><svg></svg></div>
             </div>
-            <p class="note">Puedes <a href="#/en-vivo">probar la cámara en vivo</a> mientras tanto: tu video sigue aquí.</p>
+            <p class="note">${T('meanwhile')}</p>
           </div>
 
           <div data-show="done">
-            <h2>¡Listo!</h2>
+            <h2>${T('done')}</h2>
             <p class="lead done-text"></p>
             ${trainBoxHTML()}
             <div class="row">
-              <button class="primary again" type="button">Subir otro video</button>
-              <a class="button" href="#/">Volver al inicio</a>
+              <button class="primary again" type="button">${T('again')}</button>
+              <a class="button" href="#/">${T('home')}</a>
             </div>
           </div>
 
           <div data-show="error">
-            <h2>No se pudo</h2>
+            <h2>${T('failedHead')}</h2>
             <p class="lead error error-text"></p>
-            <button class="primary again" type="button">Probar con otro video</button>
+            <button class="primary again" type="button">${T('tryAnother')}</button>
           </div>
 
           <div data-show="off">
-            <h2>Subir videos no está disponible ahora</h2>
-            <p class="lead"><span class="only-wide">El equipo que mira los videos está apagado. Mientras tanto, puedes usar la cámara o ver lo que Tridi ya entrega.</span><span class="only-narrow">El servidor de videos está apagado. Prueba la cámara o la entrega.</span></p>
+            <h2>${T('offHead')}</h2>
+            <p class="lead"><span class="only-wide">${T('offWide')}</span><span class="only-narrow">${T('offNarrow')}</span></p>
             <div class="row">
-              <button class="primary retry" type="button">Reintentar</button>
-              <a class="button" href="#/en-vivo">Usar la cámara</a>
-              <a class="button" href="#/entrega">Ver la entrega</a>
+              <button class="primary retry" type="button">${T('retry')}</button>
+              <a class="button" href="#/live">${T('useCamera')}</a>
+              <a class="button" href="#/delivery">${T('seeDelivery')}</a>
             </div>
             <p class="note server-url"></p>
           </div>
@@ -158,19 +160,19 @@ export function mount(root, { api }) {
     button.onclick = () => {
       session = null;
       input.value = '';
-      $('.pick-error').textContent = '';
+      $('.pick-error').innerHTML = '';
       show('pick');
     };
   }
   $('.cancel').onclick = () => abort?.abort();
 
   async function start(file) {
-    const refuse = (text) => ($('.pick-error').textContent = text);
-    if (!VIDEO_TYPES.test(file.name)) return refuse('Ese archivo no es un video. Usa un .mp4, .mov, .webm o un .zip con videos.');
-    if (file.size > MAX_BYTES) return refuse(`Ese video pesa ${Math.round(file.size / 1024 / 1024)} MB; el máximo es ${MAX_BYTES / 1024 / 1024} MB. Recórtalo o grábalo más corto.`);
+    const refuse = (markup) => ($('.pick-error').innerHTML = markup);
+    if (!VIDEO_TYPES.test(file.name)) return refuse(T('notVideo'));
+    if (file.size > MAX_BYTES) return refuse(T('tooBig', { mb: Math.round(file.size / 1024 / 1024), max: MAX_BYTES / 1024 / 1024 }));
     if (!/\.zip$/i.test(file.name)) {
       const seconds = await videoSeconds(file);
-      if (seconds > MAX_SECONDS) return refuse(`Ese video dura ${Math.round(seconds)} segundos; el máximo es ${MAX_SECONDS}. Recórtalo y vuelve a intentar.`);
+      if (seconds > MAX_SECONDS) return refuse(T('tooLong', { seconds: Math.round(seconds), max: MAX_SECONDS }));
     }
 
     session = { filename: file.name, jobId: null, job: null, clips: [] };
@@ -195,10 +197,10 @@ export function mount(root, { api }) {
     follow();
   }
 
-  function fail(text) {
-    session = { ...session, error: text };
+  function fail(markup) {
+    session = { ...session, error: markup };
     if (gone) return;
-    $('.error-text').textContent = text;
+    $('.error-text').innerHTML = markup;
     show('error');
   }
 
@@ -217,7 +219,7 @@ export function mount(root, { api }) {
     }
     const failed = job.videos.filter((v) => v.stage === 'failed');
     if (job.state === 'failed' || failed.length === job.videos.length) {
-      return fail(failed[0]?.error ?? 'Tridi no pudo ver a nadie en ese video. Prueba con otro, de perfil y con el cuerpo entero.');
+      return fail(failed[0]?.error ? escapeHtml(failed[0].error) : T('nobody'));
     }
     try {
       session.clips = await Promise.all(job.videos.filter((v) => v.clip_id).map((v) => fetchClip(api.url, v.clip_id)));
@@ -227,8 +229,7 @@ export function mount(root, { api }) {
     const name = session.filename.replace(/\.[^.]+$/, '');
     session.clips.forEach((clip, i) => addUserClip(clip, session.clips.length > 1 ? `${name} (${i + 1})` : name));
     if (gone) return;
-    $('.done-text').textContent =
-      session.clips.length > 1 ? `Tridi ya tiene ${session.clips.length} movimientos nuevos.` : 'Tridi ya tiene el movimiento de tu video.';
+    $('.done-text').innerHTML = session.clips.length > 1 ? T('doneMany', { n: session.clips.length }) : T('doneOne');
     // Straight to training, no button to press. The first movement only: the server trains one at
     // a time with 3 waiting (docs/contrato.md), and a .zip of several would fill its queue. A clip
     // that cannot be trained (too little of the body seen) shows why instead; coming back to this
@@ -251,11 +252,11 @@ export function mount(root, { api }) {
     });
     const current = videos.find((v) => (STAGE_ORDER[v.stage] ?? 1) === step) ?? videos[0];
     $('.stage-bar').style.width = `${Math.round(100 * (current?.progress ?? 0))}%`;
-    $('.queue').textContent =
+    $('.queue').innerHTML =
       job.state === 'queued' && job.position > 0
-        ? `Hay ${job.position} ${job.position === 1 ? 'video' : 'videos'} antes que el tuyo.`
+        ? job.position === 1 ? T('aheadOne') : T('aheadMany', { n: job.position })
         : videos.length > 1
-          ? `${videos.filter((v) => v.stage === 'done').length} de ${videos.length} videos listos.`
+          ? T('ready', { done: videos.filter((v) => v.stage === 'done').length, total: videos.length })
           : '';
     drawChooser(job);
   }
@@ -298,13 +299,13 @@ export function mount(root, { api }) {
   // Off: says which server it tried, and can ask again (the tunnel may just have been slow).
   // api.url is final once the server was looked for (data/serve.sh publishes where it is).
   const showServer = () =>
-    ($('.server-url').textContent = api.url ? `Servidor: ${api.url}` : 'El servidor de videos no está encendido ahora.');
+    ($('.server-url').innerHTML = api.url ? T('server', { url: escapeHtml(api.url) }) : T('serverOff'));
   $('.retry').onclick = async () => {
     $('.retry').disabled = true;
-    $('.retry').textContent = 'Probando…';
+    $('.retry').innerHTML = T('trying');
     const ok = await api.recheck();
     $('.retry').disabled = false;
-    $('.retry').textContent = 'Reintentar';
+    $('.retry').innerHTML = T('retry');
     showServer();
     if (!gone && ok) show('pick');
   };

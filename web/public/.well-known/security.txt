@@ -1,0 +1,4 @@
+Canonical: https://trytridi.com/.well-known/security.txt
+Contact: mailto:juanesvillamendoza@gmail.com
+Expires: 2027-09-11T12:00:00Z
+Preferred-Languages: en, es

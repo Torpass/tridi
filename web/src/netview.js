@@ -6,6 +6,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
+import { LANGS, dict } from './i18n.js';
+
 // Same cadence as GET /train (TRAIN_POLL_MS in data/live/src/upload.js) and as the pictures
 // themselves (NET_EVERY_S in training/netlive.py): asking faster only gets the same file again.
 const POLL_MS = 2000;
@@ -25,10 +27,25 @@ const NEGATIVE = new THREE.Color('#5fb4ff'); // negative activity, distinct from
 const IDLE = new THREE.Color('#3a4045'); // a neuron near zero, just visible on --scene
 const SCENE_BG = new THREE.Color('#2b3034'); // --scene, so the canvas blends with the other 3D views
 
-const LAYER_NAMES = ['Lo que siente', 'Capa 1', 'Capa 2', 'Capa 3', 'Motores'];
+const { T, A, L } = dict({
+  senses: { es: 'Lo que siente', en: 'What it senses' },
+  layer: { es: 'Capa {k}', en: 'Layer {k}' },
+  motors: { es: 'Motores', en: 'Motors' },
+  title: { es: 'La red de la política, entrenándose', en: 'The policy’s network, training' },
+  reward: { es: 'Recompensa por paso', en: 'Reward per step' },
+  upright: { es: 'Segundos sin caerse', en: 'Seconds without falling' },
+  wait: { es: 'La red aparece cuando el robot empieza a practicar.', en: 'The network shows up when the robot starts practicing.' },
+  full: { es: 'Pantalla completa', en: 'Full screen' },
+  step: { es: '· paso {a} de {b}', en: '· step {a} of {b}' },
+  measuring: { es: 'midiendo…', en: 'measuring…' },
+  change: { es: 'Cuánto cambiaron los pesos en los últimos 2 s: {change} · exploración {std}', en: 'How much the weights changed in the last 2 s: {change} · exploration {std}' },
+});
+// Layer k of the network by name: the input, the hidden layers, the motors (the last of `count`).
+const layerName = (k, count, language) => L(k === 0 ? 'senses' : k === count - 1 ? 'motors' : 'layer', { k }, language);
+const layerSpans = (k, count) => LANGS.map((l) => `<span class="t" lang="${l}">${layerName(k, count, l)}</span>`).join('');
 
-const num = (x, digits = 1) => x.toLocaleString('es', { minimumFractionDigits: digits, maximumFractionDigits: digits });
-const stepCount = (steps) => (steps < 1e6 ? `${Math.round(steps / 1e3)} k` : `${num(steps / 1e6)} M`);
+const num = (x, digits = 1, language = 'es') => x.toLocaleString(language, { minimumFractionDigits: digits, maximumFractionDigits: digits });
+const stepCount = (steps, language) => (steps < 1e6 ? `${Math.round(steps / 1e3)} k` : `${num(steps / 1e6, 1, language)} M`);
 
 /** Positions of n neurons on a square-ish grid in the YZ plane at x. */
 function gridPositions(n, x) {
@@ -76,15 +93,15 @@ export function mountNetView(el) {
     <canvas class="net-canvas"></canvas>
     <div class="net-labels"></div>
     <div class="net-hud">
-      <p class="net-title">La red de la política, entrenándose <span class="net-step"></span></p>
+      <p class="net-title">${T('title')} <span class="net-step"></span></p>
       <div class="net-curves">
-        <figure><figcaption>Recompensa por paso</figcaption><canvas class="net-reward"></canvas></figure>
-        <figure><figcaption>Segundos sin caerse</figcaption><canvas class="net-episode"></canvas></figure>
+        <figure><figcaption>${T('reward')}</figcaption><canvas class="net-reward"></canvas></figure>
+        <figure><figcaption>${T('upright')}</figcaption><canvas class="net-episode"></canvas></figure>
       </div>
       <p class="net-change"></p>
     </div>
-    <p class="net-wait">La red aparece cuando el robot empieza a practicar.</p>
-    <button class="net-full" type="button" aria-label="Pantalla completa">⤢</button>`;
+    <p class="net-wait">${T('wait')}</p>
+    <button class="net-full" type="button" ${A({ 'aria-label': 'full' })}>⤢</button>`;
   const $ = (s) => el.querySelector(s);
   const canvas = $('.net-canvas');
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -165,7 +182,7 @@ export function mountNetView(el) {
 
     const labels = $('.net-labels');
     labels.innerHTML = sizes
-      .map((n, k) => `<span>${LAYER_NAMES[k] ?? `Capa ${k}`}<b>${n}</b></span>`)
+      .map((n, k) => `<span>${layerSpans(k, sizes.length)}<b>${n}</b></span>`)
       .join('');
     // Label anchors: under each layer's grid.
     const anchors = positions.map((ps) => new THREE.Vector3(ps[0].x, Math.min(...ps.map((p) => p.y)) - 0.45, 0));
@@ -199,13 +216,15 @@ export function mountNetView(el) {
 
   function hud(s) {
     $('.net-wait').hidden = true;
-    $('.net-step').textContent = `· paso ${stepCount(s.step)} de ${stepCount(s.total_steps)}`;
+    $('.net-step').innerHTML = T('step', { a: (l) => stepCount(s.step, l), b: (l) => stepCount(s.total_steps, l) });
     sparkline($('.net-reward'), s.history.reward, '#c8ff2e');
     sparkline($('.net-episode'), s.history.episode_s, '#f1f3ee');
-    const change = s.change
-      ? s.change.map((c, k) => `${LAYER_NAMES[k + 1] ?? k + 1} ${num(100 * c, 2)} %`).join(' · ')
-      : 'midiendo…';
-    $('.net-change').textContent = `Cuánto cambiaron los pesos en los últimos 2 s: ${change} · exploración ${num(s.std, 2)}`;
+    // s.change has one entry per layer after the input.
+    const count = (s.change?.length ?? 0) + 1;
+    const change = (l) => (s.change
+      ? s.change.map((c, k) => `${layerName(k + 1, count, l)} ${num(100 * c, 2, l)} %`).join(' · ')
+      : L('measuring', {}, l));
+    $('.net-change').innerHTML = T('change', { change, std: (l) => num(s.std, 2, l) });
   }
 
   const tmpColor = new THREE.Color();

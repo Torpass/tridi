@@ -59,9 +59,10 @@ const clip = buildPoseClip(samples, { width: W, height: H, id: 'clip_check_01' }
 const fail = [];
 const check = (ok, msg) => ok || fail.push(msg);
 
-check(clip.source === 'camera' && clip.source_file === null, 'source must be camera with no file');
+check(clip.source === 'camera' && clip.source_file === null && clip.version === 2, 'source must be camera v2 with no file');
 check(clip.fps === 30 && clip.skeleton === 'mediapipe33' && clip.units === 'm' && clip.origin === 'hips', 'header');
 check(clip.frames.every((f) => f.joints.length === 33 && f.joints.every((j) => j.length === 4)), '33 joints of 4 values');
+check(clip.frames.every((f) => typeof f.contacts?.left_foot === 'boolean' && typeof f.contacts?.right_foot === 'boolean'), 'contacts per frame');
 check(clip.frames.every((f, k) => Math.abs(f.t - k / 30) < 1e-3), 'frames every 1/30 s');
 const hips = (f) => [0, 1, 2].map((a) => (f.joints[23][a] + f.joints[24][a]) / 2);
 check(hips(clip.frames[0]).every((v) => Math.abs(v) < 1e-3), 'origin at the hips of the first frame');

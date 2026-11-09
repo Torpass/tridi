@@ -58,6 +58,8 @@ export class RobotView {
     this.world.rotation.x = -Math.PI / 2;
     scene.add(this.world);
     this.geoms = this.buildGeoms();
+    this.sensorGroup = this.buildSensorCone();
+    this.world.add(this.sensorGroup);
 
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
     this.camera.position.set(2.6, 1.5, -1.6);
@@ -65,8 +67,8 @@ export class RobotView {
     this.controls.target.set(0, TARGET_HEIGHT, 0);
     this.controls.enableDamping = true;
     this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
-    this.controls.minDistance = 0.8;
-    this.controls.maxDistance = 12;
+    this.controls.minDistance = 0.65;
+    this.controls.maxDistance = 8.5;
 
     this.matrix = new THREE.Matrix4();
     this.followed = new THREE.Vector3();
@@ -197,10 +199,92 @@ export class RobotView {
       );
       object.quaternion.setFromRotationMatrix(this.matrix);
     }
+    this.updateSensorCone();
     this.onFrame?.(); // what the page draws on top of the robot (the Dex3 hands in mimic), after its pose
     this.follow();
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
+  }
+
+  buildSensorCone() {
+    const group = new THREE.Group();
+    group.visible = false;
+    const fanGeom = new THREE.BufferGeometry();
+    // 6 triangles (7 rays + origin = 8 vertices, 6 * 3 = 18 indices)
+    const fanVerts = new Float32Array(8 * 3);
+    fanGeom.setAttribute('position', new THREE.BufferAttribute(fanVerts, 3));
+    fanGeom.setIndex([0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4, 5, 0, 5, 6, 0, 6, 7]);
+    const fanMat = new THREE.MeshBasicMaterial({
+      color: 0xc8ff2e,
+      transparent: true,
+      opacity: 0.16,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const fanMesh = new THREE.Mesh(fanGeom, fanMat);
+
+    // 7 ray lines + arc perimeter (7 * 2 + 6 * 2 = 26 vertices)
+    const lineGeom = new THREE.BufferGeometry();
+    const lineVerts = new Float32Array(26 * 3);
+    lineGeom.setAttribute('position', new THREE.BufferAttribute(lineVerts, 3));
+    const lineMat = new THREE.LineBasicMaterial({
+      color: 0xc8ff2e,
+      transparent: true,
+      opacity: 0.72,
+    });
+    const lineSegs = new THREE.LineSegments(lineGeom, lineMat);
+
+    group.add(fanMesh, lineSegs);
+    group.userData = { fanGeom, fanMat, lineGeom, lineMat };
+    return group;
+  }
+
+  updateSensorCone() {
+    const sr = this.sim.sensorReadout;
+    if (!sr || !sr.rays) {
+      if (this.sensorGroup) this.sensorGroup.visible = false;
+      return;
+    }
+    this.sensorGroup.visible = true;
+    const { fanGeom, fanMat, lineGeom, lineMat } = this.sensorGroup.userData;
+    const { sx, sy, sz, yaw, rays, distCm, dodgeStage } = sr;
+    const angles = [-0.42, -0.28, -0.14, 0, 0.14, 0.28, 0.42];
+    const hex = dodgeStage > 0 || distCm < 38 ? 0xff3b2a : distCm < 58 ? 0xf59e0b : 0xc8ff2e;
+    fanMat.color.setHex(hex);
+    lineMat.color.setHex(hex);
+
+    const fp = fanGeom.attributes.position.array;
+    fp[0] = sx;
+    fp[1] = sy;
+    fp[2] = sz;
+    for (let i = 0; i < 7; i++) {
+      const a = yaw + angles[i];
+      const d = Math.min(rays[i], 1.45);
+      fp[3 * (i + 1)] = sx + Math.cos(a) * d;
+      fp[3 * (i + 1) + 1] = sy + Math.sin(a) * d;
+      fp[3 * (i + 1) + 2] = sz;
+    }
+    fanGeom.attributes.position.needsUpdate = true;
+
+    const lp = lineGeom.attributes.position.array;
+    let idx = 0;
+    for (let i = 0; i < 7; i++) {
+      lp[idx++] = sx;
+      lp[idx++] = sy;
+      lp[idx++] = sz;
+      lp[idx++] = fp[3 * (i + 1)];
+      lp[idx++] = fp[3 * (i + 1) + 1];
+      lp[idx++] = sz;
+    }
+    for (let i = 0; i < 6; i++) {
+      lp[idx++] = fp[3 * (i + 1)];
+      lp[idx++] = fp[3 * (i + 1) + 1];
+      lp[idx++] = sz;
+      lp[idx++] = fp[3 * (i + 2)];
+      lp[idx++] = fp[3 * (i + 2) + 1];
+      lp[idx++] = sz;
+    }
+    lineGeom.attributes.position.needsUpdate = true;
   }
 
   follow() {

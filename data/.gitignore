@@ -3,3 +3,8 @@ __pycache__/
 models/
 samples/
 server_data/
+thirdparty/
+capture2/out/
+set-de-prueba/*
+!set-de-prueba/manifest.csv
+!set-de-prueba/quality.csv

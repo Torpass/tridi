@@ -87,8 +87,8 @@ function readTensor(reader) {
     else if (field === 9) raw = value.raw();
   }
   let data;
-  if (type === FLOAT) data = raw ? new Float32Array(raw.buffer) : Float32Array.from(floats);
-  else if (type === INT64) data = raw ? Array.from(new BigInt64Array(raw.buffer), Number) : ints;
+  if (type === FLOAT) data = raw ? new Float32Array(raw.buffer, raw.byteOffset, raw.byteLength / 4) : Float32Array.from(floats);
+  else if (type === INT64) data = raw ? Array.from(new BigInt64Array(raw.buffer, raw.byteOffset, raw.byteLength / 8), Number) : ints;
   else throw new Error(`onnx-lite: tensor type ${type} is not supported`);
   return { name, dims, data };
 }
@@ -215,6 +215,12 @@ const OPS = {
     return { dims: x.dims, data: x.data.map((v) => Math.min(high, Math.max(low, v))) };
   },
   Elu: ([x], { alpha = 1 }) => ({ dims: x.dims, data: x.data.map((v) => (v >= 0 ? v : alpha * Math.expm1(v))) }),
+  Tanh: ([x]) => ({ dims: x.dims, data: x.data.map(Math.tanh) }),
+  Relu: ([x]) => ({ dims: x.dims, data: x.data.map((v) => Math.max(0, v)) }),
+  Sin: ([x]) => ({ dims: x.dims, data: x.data.map(Math.sin) }),
+  Cos: ([x]) => ({ dims: x.dims, data: x.data.map(Math.cos) }),
+  Identity: ([x]) => x,
+  MatMul: ([a, b]) => gemm([a, b], {}),
   Gemm: gemm,
   Constant: (_, { value }) => value,
   Slice: slice,

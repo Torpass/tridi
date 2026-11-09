@@ -23,20 +23,20 @@ const MODEL_URL = (variant) =>
 
 const HAND_MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/latest/hand_landmarker.task';
 // A hand found by the hand model belongs to the pose's wrist nearest to its own wrist, if within
-// this share of the image's height (~7 cm at 2 m from a laptop webcam). Not by its handedness
+// this share of the image's height (~18 cm at 2 m from a laptop webcam). Not by its handedness
 // label: on a selfie camera it is reversed and sometimes jumps (docs/investigacion/2026-10-24-manos-y-dedos-en-vivo.md).
-const HAND_TO_WRIST = 0.08;
+// Raised from 0.08 to 0.20 in v2 because during fast waving (saludar-02) the body's wrist lags the
+// hand detector by up to 0.18 of the frame height (data/capture2/to_poseclip.py).
+const HAND_TO_WRIST = 0.20;
 // The hand model costs ~11 ms a frame, as much as the pose. While it finds a hand it runs every
 // frame; with none in the last HAND_RECENT_S (the person is far, or the hands are down) it only
 // looks every HAND_PROBE_EVERY frames, so a person stepping close is picked up within ~0.2 s at
 // 30 fps and one standing far pays a sixth of it.
 const HAND_RECENT_S = 1;
 const HAND_PROBE_EVERY = 6;
-// While it sees a hand it runs every HAND_TRACK_EVERY frames, and the frames between reuse its
-// last hands: at 30-60 fps a hand moves little in one frame, and the robot's fingers are filtered
-// anyway (physics/ fingers), while the ~11 ms saved every other frame is what kept slower laptops
-// under 20 fps with the robot moving in jumps.
-const HAND_TRACK_EVERY = 2;
+// In v2, while tracking a visible hand, run every frame (1) on desktop so fast finger counting or
+// waving has zero frame-skip lag.
+const HAND_TRACK_EVERY = 1;
 // Per-frame costs for timing() are averaged with this weight per frame (~1 s at 30 fps).
 const TIMING_WEIGHT = 1 / 30;
 
@@ -183,6 +183,13 @@ export async function createLiveCapture(video, { model = DEFAULT_MODEL, facingMo
           t: (now - recordStart) / 1000,
           world: world.map((p) => [p.x, p.y, p.z]),
           image: landmarks.map((p, i) => [p.x * w, p.y * h, vis[i]]),
+          hands:
+            handsSeen && (handsSeen.left || handsSeen.right)
+              ? {
+                  left: handsSeen.left?.map((p) => [p.x, p.y, p.z]) ?? null,
+                  right: handsSeen.right?.map((p) => [p.x, p.y, p.z]) ?? null,
+                }
+              : null,
           valid: visible,
         });
       }

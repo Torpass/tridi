@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import * as ort from '../src/onnx-lite.js'; // the page's runtime (check-onnx compares it with onnxruntime)
 import { createPolicy } from '../src/policy.js';
-import { placeXml } from '../src/scenes.js';
+import { HELD_OBJECT_SCENE, placeXml } from '../src/scenes.js';
 import { loadG1Node } from './node-model.mjs';
 
 const SCENES_DIR = new URL('../scenes/', import.meta.url);
@@ -78,6 +78,26 @@ async function shove(target) {
   const touched = await shove(geom('place_0_caja'));
   const moved = Math.hypot(...sim.bodyPosition('place_0_caja_body').slice(0, 2).map((v, k) => v - before[k]));
   expect(touched && moved > 0.05, `shoved toward a 2 kg box at its feet, the robot moves it ${(100 * moved).toFixed(0)} cm`);
+}
+
+console.log('physical object grasping, wet slip, and gravity drop with liquid spheres');
+{
+  await load(HELD_OBJECT_SCENE);
+  const heldDry = sim.holdObject({ wet: false });
+  await run(1.0);
+  const cupDryZ = sim.bodyPosition('place_0_taza_body')[2];
+  expect(heldDry && sim.graspState().held && cupDryZ > 0.4, `dry grasp (mu=0.85) holds the cup with liquid spheres in hand (z=${cupDryZ.toFixed(2)} m)`);
+
+  sim.dropObject();
+  await run(0.8);
+  const cupDroppedZ = sim.bodyPosition('place_0_taza_body')[2];
+  expect(!sim.graspState().held && cupDroppedZ < 0.15, `dropObject releases the cup and liquid under gravity to the floor (z=${cupDroppedZ.toFixed(2)} m)`);
+
+  sim.holdObject({ wet: true });
+  await run(1.0);
+  const stateWet = sim.graspState();
+  const cupWetZ = sim.bodyPosition('place_0_taza_body')[2];
+  expect(stateWet.slipped && !stateWet.held && cupWetZ < 0.2, `soapy/wet grasp (mu=0.12) slips under gravity and drops the cup (z=${cupWetZ.toFixed(2)} m)`);
 }
 
 sim.policy?.dispose();

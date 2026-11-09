@@ -1,0 +1,143 @@
+<mujoco model="luigi_lab3">
+  <compiler angle="radian" meshdir="assets"/>
+
+  <option timestep="0.002" iterations="50" ls_iterations="10"/>
+
+  <asset>
+    <!-- Exact parametric CAD meshes from Luigi D'Aquaro & Jorge Younes (Laboratorio III, mm -> 2x scale = 0.002 m/mm) -->
+    <mesh name="chasis_mesh" file="1_chasis_robot.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="soporte_motor_mesh" file="2_soporte_motor_x2.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="patin_mesh" file="3_patin_delantero.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="bandeja_mesh" file="4_bandeja_protoboard.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="rin_mesh" file="5_rin_x2.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="llanta_mesh" file="6_llanta_x2_TPU.stl" scale="0.002 0.002 0.002"/>
+  </asset>
+
+  <worldbody>
+    <!-- Root body named "pelvis" (with child "torso_link") so Tridi's camera tracker and push tool work seamlessly -->
+    <body name="pelvis" pos="0 0 0.0875">
+      <freejoint name="floating_base"/>
+      <inertial pos="0.01 0 0.01" mass="2.2" diaginertia="0.012 0.018 0.024"/>
+
+      <body name="torso_link" pos="0 0 0.03">
+        <inertial pos="0 0 0" mass="0.2" diaginertia="0.001 0.001 0.001"/>
+      </body>
+
+      <!-- CAD frame: origin at rear edge of plate (x = -0.15 m), centerline (y = 0), bottom of plate (z = 0) -->
+      <body name="cad_origin" pos="-0.15 0 0">
+        <!-- 1. Chasis principal impreso en PLA negro mate (como en el robot físico de Luigi) -->
+        <geom name="chasis_visual" type="mesh" mesh="chasis_mesh" group="2" contype="0" conaffinity="0" rgba="0.13 0.14 0.16 1"/>
+        <!-- Solid collision box for chassis body so it never passes through obstacles -->
+        <geom name="chasis_collision" type="box" pos="0.15 0 0.03" size="0.155 0.112 0.032" group="3" contype="1" conaffinity="1" friction="0.3 0.01 0.005"/>
+
+        <!-- 2. Soportes de motor izquierdo y derecho -->
+        <geom name="soporte_izq_visual" type="mesh" mesh="soporte_motor_mesh" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.18 0.19 0.22 1"/>
+        <geom name="soporte_der_visual" type="mesh" mesh="soporte_motor_mesh" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.18 0.19 0.22 1"/>
+
+        <!-- 3. Patin delantero (tercer apoyo en X = 138 mm -> 0.276 m en marco CAD) -->
+        <geom name="patin_visual" type="mesh" mesh="patin_mesh" pos="0.552 0 0" quat="0 0 1 0" group="2" contype="0" conaffinity="0" rgba="0.15 0.16 0.18 1"/>
+        <!-- Low-friction caster sphere touching the floor at z = -0.0875 -->
+        <geom name="patin_collision" type="sphere" pos="0.276 0 -0.0675" size="0.020" group="3" contype="1" conaffinity="1" friction="0.02 0.005 0.001"/>
+        <geom name="rear_skid_collision" type="sphere" pos="0.020 0 -0.0675" size="0.018" group="3" contype="1" conaffinity="1" friction="0.02 0.005 0.001"/>
+
+        <!-- 4. Bandeja elevada para la protoboard (z = T + POSTE_H = 33.5 mm -> 0.067 m) -->
+        <geom name="bandeja_visual" type="mesh" mesh="bandeja_mesh" pos="0 0 0.067" group="2" contype="0" conaffinity="0" rgba="0.16 0.17 0.20 1"/>
+
+        <!-- Motores DC TT amarillos (3-6V, 200 RPM) + cilindros metálicos traseros bajo la placa -->
+        <geom name="motor_tt_izq" type="box" pos="0.115 0.0812 -0.0225" size="0.052 0.0188 0.0225" group="2" contype="0" conaffinity="0" rgba="0.95 0.80 0.10 1"/>
+        <geom name="motor_tt_der" type="box" pos="0.115 -0.0812 -0.0225" size="0.052 0.0188 0.0225" group="2" contype="0" conaffinity="0" rgba="0.95 0.80 0.10 1"/>
+        <geom name="motor_can_izq" type="cylinder" pos="0.180 0.0812 -0.0225" quat="0.7071068 0 0.7071068 0" size="0.017 0.018" group="2" contype="0" conaffinity="0" rgba="0.76 0.78 0.82 1"/>
+        <geom name="motor_can_der" type="cylinder" pos="0.180 -0.0812 -0.0225" quat="0.7071068 0 0.7071068 0" size="0.017 0.018" group="2" contype="0" conaffinity="0" rgba="0.76 0.78 0.82 1"/>
+
+        <!-- Portapilas negro + 2 baterias IMR18650B verdes (3.7V x 2 = 7.4V) bajo la placa -->
+        <geom name="portapilas_box" type="box" pos="0.147 0 -0.018" size="0.077 0.042 0.008" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+        <geom name="cell_18650_1" type="cylinder" pos="0.147 0.020 -0.028" quat="0.7071068 0 0.7071068 0" size="0.018 0.068" group="2" contype="0" conaffinity="0" rgba="0.38 0.78 0.36 1"/>
+        <geom name="cell_18650_2" type="cylinder" pos="0.147 -0.020 -0.028" quat="0.7071068 0 0.7071068 0" size="0.018 0.068" group="2" contype="0" conaffinity="0" rgba="0.38 0.78 0.36 1"/>
+
+        <!-- Arduino UNO R3 azul + conector USB plateado + headers negros -->
+        <geom name="arduino_pcb" type="box" pos="0.2173 0 0.0206" size="0.0533 0.0686 0.0032" group="2" contype="0" conaffinity="0" rgba="0.04 0.42 0.68 1"/>
+        <geom name="arduino_usb" type="box" pos="0.240 0.0486 0.034" size="0.012 0.016 0.011" group="2" contype="0" conaffinity="0" rgba="0.82 0.84 0.86 1"/>
+        <geom name="arduino_dc" type="box" pos="0.182 0.052 0.033" size="0.014 0.011 0.010" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="arduino_hdr_l" type="box" pos="0.217 0.062 0.028" size="0.042 0.003 0.005" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="arduino_hdr_r" type="box" pos="0.217 -0.062 0.028" size="0.042 0.003 0.005" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+
+        <!-- Puente H L298N rojo + disipador negro bajo la bandeja -->
+        <geom name="l298n_pcb" type="box" pos="0.103 0 0.0186" size="0.043 0.043 0.0032" group="2" contype="0" conaffinity="0" rgba="0.82 0.12 0.12 1"/>
+        <geom name="l298n_heatsink" type="box" pos="0.137 0 0.045" size="0.020 0.029 0.025" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+
+        <!-- Protoboard blanca de 400 puntos + interruptor basculante negro + condensador de 100 uF -->
+        <geom name="protoboard_body" type="box" pos="0.057 0 0.0815" size="0.055 0.083 0.0095" group="2" contype="0" conaffinity="0" rgba="0.94 0.94 0.92 1"/>
+        <geom name="power_switch" type="box" pos="0.035 -0.068 0.096" size="0.016 0.011 0.009" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="capacitor_100uf" type="cylinder" pos="0.065 0.012 0.098" size="0.005 0.008" group="2" contype="0" conaffinity="0" rgba="0.15 0.25 0.55 1"/>
+
+        <!-- Sensor ultrasonico HC-SR04 (placa azul + 2 cilindros transductores plateados al frente) -->
+        <geom name="hcsr04_pcb" type="box" pos="0.285 0 0.038" size="0.003 0.045 0.020" group="2" contype="0" conaffinity="0" rgba="0.08 0.34 0.78 1"/>
+        <geom name="hcsr04_eye_l" type="cylinder" pos="0.299 0.026 0.038" quat="0.7071068 0 0.7071068 0" size="0.016 0.012" group="2" contype="0" conaffinity="0" rgba="0.78 0.80 0.84 1"/>
+        <geom name="hcsr04_eye_r" type="cylinder" pos="0.299 -0.026 0.038" quat="0.7071068 0 0.7071068 0" size="0.016 0.012" group="2" contype="0" conaffinity="0" rgba="0.78 0.80 0.84 1"/>
+        <geom name="hcsr04_mesh_l" type="cylinder" pos="0.3115 0.026 0.038" quat="0.7071068 0 0.7071068 0" size="0.013 0.001" group="2" contype="0" conaffinity="0" rgba="0.18 0.20 0.22 1"/>
+        <geom name="hcsr04_mesh_r" type="cylinder" pos="0.3115 -0.026 0.038" quat="0.7071068 0 0.7071068 0" size="0.013 0.001" group="2" contype="0" conaffinity="0" rgba="0.18 0.20 0.22 1"/>
+
+        <!-- Soporte superior + cinta negra + Sensor óptico APDS-9960 morado arriba del HC-SR04 (como en el montaje real) -->
+        <geom name="apds_boom_wood" type="box" pos="0.275 0.005 0.092" quat="0.991 0 -0.131 0" size="0.036 0.008 0.0025" group="2" contype="0" conaffinity="0" rgba="0.82 0.68 0.48 1"/>
+        <geom name="apds_boom_tape" type="box" pos="0.292 0.005 0.095" quat="0.991 0 -0.131 0" size="0.018 0.011 0.008" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="apds9960_pcb" type="box" pos="0.312 0.005 0.102" quat="0.966 0 -0.259 0" size="0.014 0.018 0.002" group="2" contype="0" conaffinity="0" rgba="0.48 0.14 0.62 1"/>
+        <geom name="apds9960_ic" type="box" pos="0.316 0.005 0.104" quat="0.966 0 -0.259 0" size="0.004 0.004 0.0015" group="2" contype="0" conaffinity="0" rgba="0.08 0.08 0.10 1"/>
+
+        <!-- Cables Dupont arqueados (amarillo, verde, azul, morado, naranja, blanco, rojo) tal como en las fotos reales -->
+        <!-- Arnes I2C + Ultrasonico desde el frente (APDS + HC-SR04) hacia el Arduino UNO y la Protoboard -->
+        <geom name="wire_yellow_1" type="capsule" fromto="0.295 0.008 0.094 0.235 -0.045 0.145" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.96 0.84 0.12 1"/>
+        <geom name="wire_yellow_2" type="capsule" fromto="0.235 -0.045 0.145 0.185 0.045 0.095" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.96 0.84 0.12 1"/>
+        <geom name="wire_yellow_3" type="capsule" fromto="0.185 0.045 0.095 0.085 0.015 0.095" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.96 0.84 0.12 1"/>
+
+        <geom name="wire_green_1" type="capsule" fromto="0.295 0.002 0.092 0.220 -0.055 0.132" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.18 0.72 0.44 1"/>
+        <geom name="wire_green_2" type="capsule" fromto="0.220 -0.055 0.132 0.205 -0.058 0.032" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.18 0.72 0.44 1"/>
+
+        <geom name="wire_blue_1" type="capsule" fromto="0.282 0.010 0.056 0.160 0.038 0.118" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.15 0.42 0.88 1"/>
+        <geom name="wire_blue_2" type="capsule" fromto="0.160 0.038 0.118 0.068 -0.025 0.094" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.15 0.42 0.88 1"/>
+
+        <geom name="wire_orange_1" type="capsule" fromto="0.282 -0.006 0.056 0.145 0.022 0.122" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.95 0.45 0.12 1"/>
+        <geom name="wire_orange_2" type="capsule" fromto="0.145 0.022 0.122 0.048 0.032 0.094" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.95 0.45 0.12 1"/>
+
+        <geom name="wire_purple_1" type="capsule" fromto="0.245 0.058 0.032 0.155 0.068 0.105" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.52 0.22 0.78 1"/>
+        <geom name="wire_purple_2" type="capsule" fromto="0.155 0.068 0.105 0.075 -0.038 0.094" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.52 0.22 0.78 1"/>
+
+        <geom name="wire_white_1" type="capsule" fromto="0.230 0.058 0.032 0.130 0.042 0.108" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.92 0.92 0.90 1"/>
+        <geom name="wire_white_2" type="capsule" fromto="0.130 0.042 0.108 0.052 0.010 0.094" size="0.0024" group="2" contype="0" conaffinity="0" rgba="0.92 0.92 0.90 1"/>
+
+        <geom name="wire_red_pwr" type="capsule" fromto="0.095 0.018 0.025 0.038 -0.048 0.094" size="0.0026" group="2" contype="0" conaffinity="0" rgba="0.88 0.14 0.14 1"/>
+
+        <!-- 5 & 6. Rueda izquierda (X_EJE = 40 mm -> 0.080 m en marco CAD, y_ext = 79 mm -> 0.158 m, z = -0.0225 m) -->
+        <body name="left_wheel_link" pos="0.080 0.132 -0.0225">
+          <inertial pos="0 0 0" mass="0.35" diaginertia="0.0008 0.0014 0.0008"/>
+          <joint name="left_wheel_joint" type="hinge" axis="0 1 0" damping="0.08" armature="0.005"/>
+          <geom name="rin_izq_visual" type="mesh" mesh="rin_mesh" pos="0 0.026 0" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.98 0.85 0.05 1"/>
+          <geom name="llanta_izq_visual" type="mesh" mesh="llanta_mesh" pos="0 0.026 0" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+          <geom name="left_wheel_collision" type="cylinder" quat="0.7071068 0.7071068 0 0" size="0.065 0.024" group="3" contype="1" conaffinity="1" friction="1.1 0.01 0.005"/>
+        </body>
+
+        <!-- 5 & 6. Rueda derecha (X_EJE = 40 mm -> 0.080 m en marco CAD, y = -0.132 m, z = -0.0225 m) -->
+        <body name="right_wheel_link" pos="0.080 -0.132 -0.0225">
+          <inertial pos="0 0 0" mass="0.35" diaginertia="0.0008 0.0014 0.0008"/>
+          <joint name="right_wheel_joint" type="hinge" axis="0 1 0" damping="0.08" armature="0.005"/>
+          <geom name="rin_der_visual" type="mesh" mesh="rin_mesh" pos="0 -0.026 0" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.98 0.85 0.05 1"/>
+          <geom name="llanta_der_visual" type="mesh" mesh="llanta_mesh" pos="0 -0.026 0" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+          <geom name="right_wheel_collision" type="cylinder" quat="0.7071068 0.7071068 0 0" size="0.065 0.024" group="3" contype="1" conaffinity="1" friction="1.1 0.01 0.005"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <pair geom1="left_wheel_collision" geom2="floor" condim="3" friction="1.1 1.1 0.01"/>
+    <pair geom1="right_wheel_collision" geom2="floor" condim="3" friction="1.1 1.1 0.01"/>
+    <pair geom1="patin_collision" geom2="floor" condim="3" friction="0.02 0.02 0.001"/>
+    <pair geom1="rear_skid_collision" geom2="floor" condim="3" friction="0.02 0.02 0.001"/>
+    <pair geom1="chasis_collision" geom2="floor" condim="3" friction="0.3 0.3 0.01"/>
+  </contact>
+
+  <!-- 2 TT DC Motor velocity servos (200 RPM = 20.94 rad/s max) -->
+  <actuator>
+    <velocity name="left_wheel_motor" joint="left_wheel_joint" kv="0.8" ctrlrange="-20.94 20.94" ctrllimited="true" forcerange="-3.5 3.5" forcelimited="true"/>
+    <velocity name="right_wheel_motor" joint="right_wheel_joint" kv="0.8" ctrlrange="-20.94 20.94" ctrllimited="true" forcerange="-3.5 3.5" forcelimited="true"/>
+  </actuator>
+</mujoco>

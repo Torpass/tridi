@@ -16,18 +16,28 @@ import { dressWet } from './wet.js';
  * the walk along +x, Simulaciones along -z (MuJoCo +y). Its shops stand on the robot's right.
  */
 function dressSidewalk(view) {
+  // Luigi's differential robot has its own physical 3.4m x 3.4m obstacle arena in luigi_lab3/scene.xml;
+  // do not place the 88m hollow Kenney street over it.
+  if (view.sim?.policy?.robot === 'luigi_lab3') {
+    return { update() {}, undo() {} };
+  }
   const { scene, renderer } = view.viewer;
   // city.js misses the grid (see hideViewerFloor): hidden first, so undoing in reverse order puts
   // floor and grid back as they were.
   const showGrid = hideViewerFloor(view);
   const undo = dressCity(scene, renderer);
   const city = scene.getObjectByName('landing-city');
-  if (city) city.rotation.y = Math.PI / 2;
+  const syncCityRotation = () => {
+    if (city) city.rotation.y = view._streetAlongX ? 0 : Math.PI / 2;
+  };
+  syncCityRotation();
   // The city at dusk is dark: the landing lights it brighter (home.js); here a little less.
   const exposure = renderer.toneMappingExposure;
   renderer.toneMappingExposure = 1.25;
   return {
-    update() {},
+    update() {
+      syncCityRotation();
+    },
     undo() {
       renderer.toneMappingExposure = exposure;
       undo();

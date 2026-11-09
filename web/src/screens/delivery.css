@@ -171,6 +171,57 @@ html.is-delivery body::before {
   text-overflow: ellipsis;
 }
 
+.dl-switcher {
+  padding: 4px 24px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background-color: #14171a;
+  color: var(--fg);
+  font: 500 12px/1.2 var(--mono);
+  cursor: pointer;
+}
+
+.dl-switcher:hover,
+.dl-switcher:focus-visible {
+  border-color: var(--signal);
+}
+
+.dl-explain {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 8px 0 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.dl-explain-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px;
+  background: rgb(241 243 238 / 0.03);
+  border: 1px solid var(--hair);
+  border-radius: 3px;
+}
+
+.dl-explain-item strong {
+  font: 600 10.5px/1.2 var(--mono);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--signal);
+}
+
+.dl-explain-item span {
+  font: 400 11.5px/1.35 var(--display);
+  color: var(--fg-2);
+}
+
+@media (max-width: 900px) {
+  .dl-explain {
+    grid-template-columns: 1fr;
+  }
+}
+
 .dl-meter {
   display: block;
   height: 3px;

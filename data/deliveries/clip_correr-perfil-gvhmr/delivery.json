@@ -1,0 +1,682 @@
+{
+  "clip_id": "clip_correr-perfil-gvhmr",
+  "title": "Correr",
+  "created_at": "2026-11-07T16:30:00+00:00",
+  "duration_s": 3.8,
+  "policy": {
+    "id": "g1-run",
+    "task": "mimic",
+    "steps": 50000000,
+    "followed_s": 3.8,
+    "trained_worlds": [
+      "plano",
+      "piedras",
+      "resbaloso",
+      "viento"
+    ],
+    "onnx": "policy.onnx",
+    "json": "policy.json"
+  },
+  "checkpoints": [
+    {
+      "steps": 0,
+      "followed_s": 0.42
+    },
+    {
+      "steps": 3000000,
+      "followed_s": 1.84
+    },
+    {
+      "steps": 20000000,
+      "followed_s": 3.42
+    },
+    {
+      "steps": 50000000,
+      "followed_s": 3.79
+    }
+  ],
+  "worlds": [
+    {
+      "id": "plano",
+      "title": "Piso plano",
+      "episodes": 8,
+      "completed": 8,
+      "seconds": {
+        "mean": 3.8,
+        "min": 3.8,
+        "max": 3.8
+      },
+      "params": {
+        "friction": [
+          1,
+          1
+        ],
+        "wind_mps": [
+          0,
+          0
+        ],
+        "mass_scale": [
+          1,
+          1
+        ],
+        "motor_scale": [
+          1,
+          1
+        ],
+        "push_n": [
+          0,
+          250
+        ]
+      }
+    },
+    {
+      "id": "piedras",
+      "title": "Piedras",
+      "episodes": 8,
+      "completed": 8,
+      "seconds": {
+        "mean": 3.8,
+        "min": 3.8,
+        "max": 3.8
+      },
+      "params": {
+        "friction": [
+          0.8,
+          1.2
+        ],
+        "wind_mps": [
+          0,
+          0
+        ],
+        "mass_scale": [
+          0.95,
+          1.05
+        ],
+        "motor_scale": [
+          0.9,
+          1.1
+        ],
+        "push_n": [
+          0,
+          250
+        ]
+      }
+    },
+    {
+      "id": "resbaloso",
+      "title": "Piso resbaloso",
+      "episodes": 8,
+      "completed": 7,
+      "seconds": {
+        "mean": 3.69,
+        "min": 2.94,
+        "max": 3.8
+      },
+      "params": {
+        "friction": [
+          0.25,
+          0.45
+        ],
+        "wind_mps": [
+          0,
+          0
+        ],
+        "mass_scale": [
+          0.95,
+          1.05
+        ],
+        "motor_scale": [
+          0.9,
+          1.1
+        ],
+        "push_n": [
+          0,
+          200
+        ]
+      }
+    },
+    {
+      "id": "viento",
+      "title": "Viento",
+      "episodes": 8,
+      "completed": 7,
+      "seconds": {
+        "mean": 3.69,
+        "min": 2.94,
+        "max": 3.8
+      },
+      "params": {
+        "friction": [
+          0.9,
+          1.1
+        ],
+        "wind_mps": [
+          6,
+          14
+        ],
+        "mass_scale": [
+          0.9,
+          1.1
+        ],
+        "motor_scale": [
+          0.85,
+          1.15
+        ],
+        "push_n": [
+          0,
+          250
+        ]
+      }
+    }
+  ],
+  "episodes": [
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 31.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.135,
+      "pelvis_error": 1.445,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 62.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.136,
+      "pelvis_error": 1.447,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 93.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.137,
+      "pelvis_error": 1.449,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 125
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.139,
+      "pelvis_error": 1.451,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 156.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.14,
+      "pelvis_error": 1.453,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 187.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.141,
+      "pelvis_error": 1.455,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 218.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.143,
+      "pelvis_error": 1.457,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "plano",
+      "params": {
+        "friction": 1,
+        "wind_mps": 0,
+        "mass_scale": 1,
+        "motor_scale": 1,
+        "push_n": 250
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.144,
+      "pelvis_error": 1.459,
+      "foot_force_peak": 405
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 0.8,
+        "wind_mps": 0,
+        "mass_scale": 0.95,
+        "motor_scale": 0.9,
+        "push_n": 31.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.145,
+      "pelvis_error": 1.457,
+      "foot_force_peak": 384.8
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 0.971,
+        "wind_mps": 0,
+        "mass_scale": 0.979,
+        "motor_scale": 1.1,
+        "push_n": 62.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.147,
+      "pelvis_error": 1.459,
+      "foot_force_peak": 396.5
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 1.143,
+        "wind_mps": 0,
+        "mass_scale": 1.007,
+        "motor_scale": 1.071,
+        "push_n": 93.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.148,
+      "pelvis_error": 1.461,
+      "foot_force_peak": 407.8
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 0.857,
+        "wind_mps": 0,
+        "mass_scale": 1.036,
+        "motor_scale": 1.043,
+        "push_n": 125
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.15,
+      "pelvis_error": 1.463,
+      "foot_force_peak": 419.6
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 1.029,
+        "wind_mps": 0,
+        "mass_scale": 0.95,
+        "motor_scale": 1.014,
+        "push_n": 156.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.151,
+      "pelvis_error": 1.465,
+      "foot_force_peak": 384.8
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 1.2,
+        "wind_mps": 0,
+        "mass_scale": 0.979,
+        "motor_scale": 0.986,
+        "push_n": 187.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.152,
+      "pelvis_error": 1.467,
+      "foot_force_peak": 396.5
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 0.914,
+        "wind_mps": 0,
+        "mass_scale": 1.007,
+        "motor_scale": 0.957,
+        "push_n": 218.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.153,
+      "pelvis_error": 1.469,
+      "foot_force_peak": 407.8
+    },
+    {
+      "world": "piedras",
+      "params": {
+        "friction": 1.086,
+        "wind_mps": 0,
+        "mass_scale": 1.036,
+        "motor_scale": 0.929,
+        "push_n": 250
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.155,
+      "pelvis_error": 1.471,
+      "foot_force_peak": 419.6
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.25,
+        "wind_mps": 0,
+        "mass_scale": 0.95,
+        "motor_scale": 0.9,
+        "push_n": 25
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.156,
+      "pelvis_error": 1.469,
+      "foot_force_peak": 384.8
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.336,
+        "wind_mps": 0,
+        "mass_scale": 0.979,
+        "motor_scale": 1.1,
+        "push_n": 50
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.157,
+      "pelvis_error": 1.471,
+      "foot_force_peak": 396.5
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.421,
+        "wind_mps": 0,
+        "mass_scale": 1.007,
+        "motor_scale": 1.071,
+        "push_n": 75
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.159,
+      "pelvis_error": 1.473,
+      "foot_force_peak": 407.8
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.279,
+        "wind_mps": 0,
+        "mass_scale": 1.036,
+        "motor_scale": 1.043,
+        "push_n": 100
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.16,
+      "pelvis_error": 1.475,
+      "foot_force_peak": 419.6
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.364,
+        "wind_mps": 0,
+        "mass_scale": 0.95,
+        "motor_scale": 1.014,
+        "push_n": 125
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.162,
+      "pelvis_error": 1.477,
+      "foot_force_peak": 384.8
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.45,
+        "wind_mps": 0,
+        "mass_scale": 0.979,
+        "motor_scale": 0.986,
+        "push_n": 150
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.163,
+      "pelvis_error": 1.479,
+      "foot_force_peak": 396.5
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.307,
+        "wind_mps": 0,
+        "mass_scale": 1.007,
+        "motor_scale": 0.957,
+        "push_n": 175
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.164,
+      "pelvis_error": 1.481,
+      "foot_force_peak": 407.8
+    },
+    {
+      "world": "resbaloso",
+      "params": {
+        "friction": 0.393,
+        "wind_mps": 0,
+        "mass_scale": 1.036,
+        "motor_scale": 0.929,
+        "push_n": 200
+      },
+      "fell": true,
+      "seconds": 2.94,
+      "pose_error": 0.155,
+      "pelvis_error": 0.781,
+      "foot_force_peak": 419.6
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 0.9,
+        "wind_mps": 6,
+        "mass_scale": 0.9,
+        "motor_scale": 0.85,
+        "push_n": 31.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.167,
+      "pelvis_error": 1.481,
+      "foot_force_peak": 364.5
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 0.986,
+        "wind_mps": 11.714,
+        "mass_scale": 0.957,
+        "motor_scale": 1.15,
+        "push_n": 62.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.168,
+      "pelvis_error": 1.483,
+      "foot_force_peak": 387.6
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 1.071,
+        "wind_mps": 8.286,
+        "mass_scale": 1.014,
+        "motor_scale": 1.107,
+        "push_n": 93.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.17,
+      "pelvis_error": 1.485,
+      "foot_force_peak": 410.7
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 0.929,
+        "wind_mps": 14,
+        "mass_scale": 1.071,
+        "motor_scale": 1.064,
+        "push_n": 125
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.171,
+      "pelvis_error": 1.487,
+      "foot_force_peak": 433.8
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 1.014,
+        "wind_mps": 10.571,
+        "mass_scale": 0.9,
+        "motor_scale": 1.021,
+        "push_n": 156.3
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.172,
+      "pelvis_error": 1.489,
+      "foot_force_peak": 364.5
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 1.1,
+        "wind_mps": 7.143,
+        "mass_scale": 0.957,
+        "motor_scale": 0.979,
+        "push_n": 187.5
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.174,
+      "pelvis_error": 1.491,
+      "foot_force_peak": 387.6
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 0.957,
+        "wind_mps": 12.857,
+        "mass_scale": 1.014,
+        "motor_scale": 0.936,
+        "push_n": 218.8
+      },
+      "fell": false,
+      "seconds": 3.8,
+      "pose_error": 0.175,
+      "pelvis_error": 1.493,
+      "foot_force_peak": 410.7
+    },
+    {
+      "world": "viento",
+      "params": {
+        "friction": 1.043,
+        "wind_mps": 9.429,
+        "mass_scale": 1.071,
+        "motor_scale": 0.893,
+        "push_n": 250
+      },
+      "fell": true,
+      "seconds": 2.94,
+      "pose_error": 0.165,
+      "pelvis_error": 0.793,
+      "foot_force_peak": 433.8
+    }
+  ],
+  "replay": "replay.json",
+  "files": [
+    {
+      "name": "policy.onnx",
+      "bytes": 372256,
+      "what": "La política: observaciones de entrada, 29 objetivos de motor a 50 Hz"
+    },
+    {
+      "name": "policy.json",
+      "bytes": 466,
+      "what": "Qué es la política: el clip que imita, los pasos de entrenamiento y cuánto del clip sigue"
+    },
+    {
+      "name": "motion.json",
+      "bytes": 23696,
+      "what": "El movimiento de la persona pasado al robot (RobotMotion): lo que imita"
+    },
+    {
+      "name": "poseclip.json",
+      "bytes": 89899,
+      "what": "El esqueleto 3D de la persona, cuadro a cuadro (PoseClip)"
+    },
+    {
+      "name": "scene.json",
+      "bytes": 61,
+      "what": "El lugar del video: objetos sobre el piso"
+    }
+  ]
+}

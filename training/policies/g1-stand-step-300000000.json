@@ -1,0 +1,16 @@
+{
+  "id": "g1-stand-step-300000000",
+  "robot": "unitree_g1",
+  "robot_package": "g1",
+  "mjcf": "unitree_g1/scene_mjx.xml",
+  "obs_dim": 96,
+  "nu": 29,
+  "task": "stand",
+  "trained_on": [],
+  "sense_velocity": true,
+  "worlds": [
+    "plano"
+  ],
+  "steps": 300000000,
+  "created_at": "2026-11-07T08:50:22+00:00"
+}

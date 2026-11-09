@@ -34,7 +34,7 @@ def rounded(x) -> list:
 
 def fixture(onnx_path: Path) -> Path:
     meta = json.loads(onnx_path.with_suffix(".json").read_text())
-    env = MimicEnv(seed=0, clips=(meta["motion"],))
+    env = MimicEnv(seed=0, clips=(meta["motion"],), sense_velocity=bool(meta.get("sense_velocity")))
     session = ort.InferenceSession(str(onnx_path))
     obs = env.reset_at(0.0)
     samples = []

@@ -53,7 +53,7 @@ function pose(t, at = t) {
 
 // Pure parts first.
 const url = phonePageUrl('https://tridi-alpha.vercel.app/', 'https://abc.trycloudflare.com/', 'k7m3qx2p');
-check(url === 'https://tridi-alpha.vercel.app/?api=https%3A%2F%2Fabc.trycloudflare.com#/camara/k7m3qx2p', `phone page url: ${url}`);
+check(url === 'https://tridi-alpha.vercel.app/?api=https%3A%2F%2Fabc.trycloudflare.com#/camera/k7m3qx2p', `phone page url: ${url}`);
 const back = toPose(toFrame(pose(1)));
 check(back.visible && back.world.length === 33 && Math.abs(back.world[27].x - pose(1).world[27].x) < 0.001, 'a pose survives the wire (1 mm)');
 check(toPose(toFrame(null, 3)) === null && toFrame(null, 3).t === 3, 'no body is a bare t');

@@ -1,0 +1,67 @@
+{
+  "id": "g1",
+  "name": "Unitree G1",
+  "mjcf": "unitree_g1/scene_mjx.xml",
+  "keyframe": "home",
+  "source": "MuJoCo Menagerie unitree_g1, commit f3b6013, BSD-3-Clause (Unitree Robotics)",
+  "actuators": {
+    "kind": "position"
+  },
+  "points": {
+    "pelvis": {
+      "body": "pelvis"
+    },
+    "torso": {
+      "body": "torso_link"
+    },
+    "head": {
+      "geom": "head_collision"
+    },
+    "left_foot": {
+      "body": "left_ankle_roll_link"
+    },
+    "right_foot": {
+      "body": "right_ankle_roll_link"
+    },
+    "left_hand": {
+      "geom": "left_hand_collision"
+    },
+    "right_hand": {
+      "geom": "right_hand_collision"
+    },
+    "left_knee": {
+      "body": "left_knee_link"
+    },
+    "right_knee": {
+      "body": "right_knee_link"
+    },
+    "left_elbow": {
+      "body": "left_elbow_link"
+    },
+    "right_elbow": {
+      "body": "right_elbow_link"
+    },
+    "left_shoulder": {
+      "body": "left_shoulder_pitch_link"
+    },
+    "right_shoulder": {
+      "body": "right_shoulder_pitch_link"
+    }
+  },
+  "feet": {
+    "left": [
+      "left_foot1_collision",
+      "left_foot2_collision",
+      "left_foot3_collision"
+    ],
+    "right": [
+      "right_foot1_collision",
+      "right_foot2_collision",
+      "right_foot3_collision"
+    ]
+  },
+  "hands": {
+    "dex3": "dex3/hands.json",
+    "inspire": "inspire/hands.json"
+  }
+}

@@ -5,13 +5,14 @@ import loadMujoco from '@mujoco/mujoco';
 import { Simulation } from '../src/sim.js';
 
 const MODEL_DIR = new URL('../models/unitree_g1/', import.meta.url).pathname;
+const H1_DIR = new URL('../models/unitree_h1/', import.meta.url).pathname;
 
-function readTree(dir) {
+function readTree(dir, prefix = '') {
   const files = {};
   for (const entry of readdirSync(dir, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile()) continue;
     const path = join(entry.parentPath, entry.name);
-    files[relative(dir, path)] = new Uint8Array(readFileSync(path));
+    files[`${prefix}${relative(dir, path)}`] = new Uint8Array(readFileSync(path));
   }
   return files;
 }
@@ -19,5 +20,6 @@ function readTree(dir) {
 /** @returns { mujoco, sim } the module and a Simulation standing in the "stand" keyframe */
 export async function loadG1Node() {
   const mujoco = await loadMujoco();
-  return { mujoco, sim: new Simulation(mujoco, readTree(MODEL_DIR), 'scene.xml', 'stand') };
+  const files = { ...readTree(MODEL_DIR), ...readTree(H1_DIR, 'unitree_h1/') };
+  return { mujoco, sim: new Simulation(mujoco, files, 'scene.xml', 'stand') };
 }

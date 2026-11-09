@@ -36,8 +36,8 @@ EPISODES = 8
 class WorldEnv(MimicInWorld):
     """MimicEnv in a world (worlds.py), with the values rollout() draws, plus the feet's forces."""
 
-    def __init__(self, world: dict, seed: int, motion: str):
-        super().__init__(world, seed, motion, redraw=False)
+    def __init__(self, world: dict, seed: int, motion: str, sense_velocity: bool = False):
+        super().__init__(world, seed, motion, redraw=False, sense_velocity=sense_velocity)
         self.foot_geoms = [{self.model.geom(f"{side}_foot{k}_collision").id for k in (1, 2, 3)} for side in ("left", "right")]
 
     def foot_forces(self) -> np.ndarray:
@@ -90,9 +90,10 @@ def rollout(policy_json: Path, motion: str | None, worlds: list[str], episodes: 
     rng = np.random.default_rng(seed)
 
     episodes_meta, arrays = [], []
+    sense_velocity = bool(meta_in.get("sense_velocity"))
     for world_id in worlds:
         world = load_world(world_id)
-        env = WorldEnv(world, seed, motion)
+        env = WorldEnv(world, seed, motion, sense_velocity=sense_velocity)
         if env.motion.id != meta_in["motion"]:
             raise SystemExit(f"the policy imitates {meta_in['motion']}, the motion file is {env.motion.id}")
         falls = 0

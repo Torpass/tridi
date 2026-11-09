@@ -311,7 +311,15 @@ console.log('the RobotMotions saved in motions/ are up to date with the clips in
   const dir = new URL('../motions/', import.meta.url);
   for (const file of readdirSync(dir).filter((f) => f.endsWith('.json'))) {
     const saved = JSON.parse(readFileSync(new URL(file, dir)));
-    const clip = JSON.parse(readFileSync(new URL(`../../data/clips/${file}`, import.meta.url)));
+    const dataUrl = new URL(`../../data/clips/${file}`, import.meta.url);
+    const webUrl = new URL(`../../web/clips/${file}`, import.meta.url);
+    let raw;
+    try {
+      raw = readFileSync(dataUrl);
+    } catch {
+      raw = readFileSync(webUrl);
+    }
+    const clip = JSON.parse(raw);
     const { motion } = retargetClip(mujoco, sim.model, clip);
     const worst = Math.max(...saved.qpos.flatMap((row, i) => row.map((v, j) => Math.abs(v - motion.qpos[i][j]))));
     expect(saved.qpos.length === motion.qpos.length && worst < 1e-4, `${file}: ${saved.qpos.length} frames, differs by at most ${worst.toExponential(1)} (run npm run retarget if not)`);

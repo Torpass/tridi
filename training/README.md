@@ -48,6 +48,33 @@ uv run --project training python -m training.rollout <carpeta>/<clip_id>-step-<N
 
 `rollout.py` corre la política final (el ONNX) desde el inicio del clip en N episodios por mundo de `physics/worlds/`, con cada parámetro sorteado en su rango y aplicado como `applyWorld()` de `physics/src/sim.js`, y guarda `meta.json` + `rollouts.npz` con el formato del [contrato](../docs/contrato.md#datos-para-entrenar-robots-2026-10-24).
 
+## Entrenar horas o días en la Mac de trabajo (rama `juan/experimental`)
+
+`ppo.py` cuida la Mac y no gasta horas en algo que dejó de aprender ([plan v2](../docs/plan-v2.md), sección 3):
+
+- **Guardián** ([`guard.py`](guard.py)): a toda máquina si nadie usa la Mac; en prioridad de fondo si la estás usando (fresca y fluida, ~8× más lento: ~1.300 contra 11.400 pasos/s en la M2 Air), o `--shared nice` (todos los núcleos con nice 10: rápido, más tibia); en pausa si está a batería, caliente (estado térmico de macOS "serious" o más) o con la memoria al límite. Mantiene la Mac despierta solo mientras entrena enchufada. `--no-guard` lo apaga.
+- **Pausar a mano:** `uv run --project training python -m training.guard pause` (y `resume`, `status`).
+- **Reanudar:** `latest.pt` cada 5 min y al cortar con Ctrl-C; `--resume` sigue donde quedó (después de un reinicio también).
+- **Meseta** ([`plateau.py`](plateau.py)): cada checkpoint se evalúa (`evals.csv`); si 3 evaluaciones seguidas no mejoran 2 %, o 10× los pasos no dan +10 %, el run para solo y escribe `plateau.md` con el porqué. `--no-plateau-stop` lo deja seguir. Una corrida larga sin `--every` igual tiene ~20 evaluaciones.
+- **Registro:** cada run terminado suma una línea a [`experiments.csv`](experiments.csv) (versionado): commit, pasos, minutos, pausas, métrica final y mejor, por qué paró y `--note "qué cambia y por qué"`.
+
+```bash
+uv run --project training python -m training.ppo --task mimic --motion <clip> --steps 1000000000 --run walk-v5 \
+  --note "qué cambia respecto de walk-v4"            # días; para solo si se estanca
+uv run --project training python -m training.ppo ... --run walk-v5 --resume   # después de un corte
+```
+
+### Antes de entrenar largo: ¿se puede aprender este clip?
+
+```bash
+uv run --project training python -m training.checks <clip> --only c1,c2   # segundos
+uv run --project training python -m training.checks <clip>                # + C3 y C4, minutos
+uv run --project training python -m training.failmap <step_N.pt | policy.onnx>  # dónde se cae
+```
+
+- **C1** referencia factible (`diagnose_reference.py`); **C2** física factible: motores al límite con la pelvis sostenida y el ZMP de la referencia contra los pies apoyados (¿el movimiento está en equilibrio?); **C3** aprende el primer segundo en 2 M pasos; **C4** 1 M pasos de humo: episodio y recompensa suben. Informe en `training/runs/checks-<clip>/report.md`.
+- Durante el entrenamiento, cada evaluación de imitación escribe el **mapa de caídas** (`failmap.csv`, `failmap.txt`: caídas por tramo de 0,5 s, arrancando en cada tramo con 2 s de horizonte) y cada actualización la **salud** (KL, fracción recortada, varianza explicada del crítico, desvío de la exploración, norma del gradiente) en `progress.csv`; fuera de rango 20 actualizaciones seguidas → aviso en `health.txt`. `plateau.md` los incluye.
+
 ## La entrega de un clip
 
 Lo que se lleva el cliente, en una carpeta: la política final (`.onnx` + `.json`), el dataset, el `RobotMotion`, el `PoseClip` y la escena del video, más `delivery.json` (resumen por mundo y por episodio, la escalera de checkpoints y los archivos con su peso) y `replay.json` (cada episodio a 25 Hz y siempre con su última fila, para verlo sin bajar el dataset). Formato en el [contrato](../docs/contrato.md#la-entrega-de-un-clip-propuesta-de-juan-2026-10-24); el servidor la arma sola después del dataset ([`data/`](../data/README.md)).
@@ -106,6 +133,7 @@ Ninguno llega al final: `g1-walk` sigue 3,5 s del clip desde el inicio y se entr
 | 6-34 | Ángulos menos la pose de pie: `qpos[7:36] − default` |
 | 35-63 | Velocidades de las articulaciones: `qvel[6:35] × 0,05` |
 | 64-92 | Los `ctrl` anteriores como acción: `(ctrl_anterior − default) / 0,25` (al empezar, `ctrl_anterior = default`) |
+| 93-95 | Con `--sense-velocity` (96 entradas): velocidad lineal `(vx, vy, vz)` de la pelvis en el marco del cuerpo |
 
 `default` es el `ctrl` del keyframe `home` de `scene_mjx.xml`. El orden de los 29 motores es el de los actuadores del modelo (de la cadera izquierda a la muñeca derecha).
 
@@ -116,22 +144,22 @@ Ninguno llega al final: `g1-walk` sigue 3,5 s del clip desde el inicio y se entr
 | Simulación, 64 robots en 8 núcleos | 11.400 pasos de política por segundo |
 | PPO en CPU vs MPS | 11.200 vs 10.100 pasos/s: la red es tan chica que mandar cada lote a la GPU cuesta más de lo que ahorra |
 | Sin política (motores fijos en la pose de pie) | Se cae en 1 s |
-| ONNX vs torch | Misma salida (diferencia máxima 3e-7 rad), 265 KB |
+| ONNX vs torch | Misma salida (diferencia máxima 3e-7 rad), 268 KB |
 | Primer entrenamiento (`stand-v1`, 20 M pasos) | 38,5 min |
 
-## La política de hoy: `policies/g1-stand.onnx`
+## La política de hoy: `policies/g1-stand.onnx` (Stand v2, 300 M pasos)
 
-Dos vueltas en una M2: `stand-v1` (20 M pasos, 38,5 min, empujones al azar de 0 a 300 N) y `stand-v2`, que la continúa con empujones de 100 a 350 N (20 M pasos más, 34,5 min). Evaluada con `evaluate.py`: 5 arranques de 20 s, y el empujón de la web (250 N, 0,1 s, en el torso) a los 4, 8, 12 y 16 s desde adelante, la izquierda, atrás y la derecha.
+Entrenada hasta **300 M pasos** (`stand-300m`, continuando la línea `stand-v1 → stand-v2 → stand-v7b → stand-v7d` con `--sense-velocity` de 96 entradas y término de Capture Point `STANCE_V2`): a los 100 M pasos domina el piso plano (`4,0 de 4` empujones hasta 350 N), y de 100 M a 300 M entrena en los 4 mundos (`plano, piedras, resbaloso, viento`, viento hasta 6 m/s y empujones de 50 a 350 N). Evaluada con `evaluate.py`: 5 arranques de 20 s, y el empujón de la web (250 N, 0,1 s, en el torso) a los 4, 8, 12 y 16 s desde adelante, la izquierda, atrás y la derecha.
 
 | Política (`policies/`) | De pie (de 20 s) | Empujones de 250 N aguantados (de 4) |
 | --- | --- | --- |
 | Sin política (motores fijos en la pose de pie) | 1,1 s | 0 |
 | `g1-stand-step-0` (sin entrenar) | 1,1 s | 0 |
 | `g1-stand-step-3000000` (v1, 3 M) | 4,2 s | 0 |
-| `g1-stand-step-10000000` (v1, 10 M) | 9,6 s | 1,2 |
+| `g1-stand-step-10000000` (10 M) | 11,2 s (20,0 s quieto) | 1,6 |
 | `g1-stand-step-20000768` (v1, 20 M) | 13,4 s | 2,2 |
-| v2 (40 M en total; fue `g1-stand` hasta `6b9bb38`, sigue en git) | 20 s, girando a 55°/s y con 3,9 pisadas/s | 4 |
-| `g1-stand-quiet` (`stand-v7b` @ 8 M, 48 M en total: v2 + términos de quietud) | 20 s, sin girar (0,9°/s) | 3,0 (falla desde la derecha) |
-| **`g1-stand`** (`stand-v7d` @ 12 M desde `stand-v7b`, 60 M en total) | **20 s, sin girar (1,6°/s), 0,2 pisadas/s** | **3,6** (falla desde la derecha) |
+| `g1-stand-quiet` (`stand-v7b`, 48 M) | 20 s, sin girar (0,9°/s) | 3,0 |
+| `g1-stand-step-100000000` / `g1-stand-v2` (100 M, `stand-300m`) | **20 s, sin girar (0,4°/s), 0,0 pisadas/s** | **4,0** (4,0 de 4 hasta 350 N en plano) |
+| **`g1-stand-step-300000000` / `g1-stand`** (300 M, 4 mundos) | **20 s, sin girar (0,3°/s), 0,0 pisadas/s** | **4,0** |
 
-La v2 aguantaba todos los empujones hasta 250 N (con 300 N, 3,2 de 4; con 350 N, 1,2), pero lo lograba pivotando sobre un pie. `g1-stand` es la postura quieta que se ve en la web, a cambio de unos empujones: con el botón de la web, que empuja en dirección al azar, se cae más o menos 1 de cada 4 veces. Medidas de `training.evaluate`, el 2026-10-24. La escalera de `g1-stand-step-*` es la del pitch: el mismo robot sin entrenar, a medias y entrenado. Curvas: `policies/g1-stand-progress.csv` (v1) y `policies/g1-stand-v2-progress.csv`.
+Con `stand-300m` (`100 M` y `300 M` pasos), el G1 ya no necesita elegir entre quedarse quieto o aguantar empujones: gracias a la velocidad lineal de la pelvis (`sense_velocity`, 96 entradas) y el bono de Capture Point (`capture=0.05`), permanece plantado con ambos pies (`0,0 pisadas/s`, `0,3–0,4 °/s` de giro) cuando está en calma y da el paso de recuperación exacto cuando recibe un empujón de 250 N desde cualquiera de los 4 lados (`4,0 de 4`). Curvas: `policies/g1-stand-progress.csv` (v1) y `policies/g1-stand-v2-progress.csv`.

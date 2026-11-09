@@ -31,7 +31,8 @@ export const userClips = [];
 
 export function addUserClip(clip, title) {
   if (userClips.some((item) => item.clip === clip.id)) return;
-  userClips.unshift({ clip: clip.id, title, credit: 'Tu video', url: null, data: clip });
+  // title: a file name (string) or { es, en } (a camera clip); strings-names.clipName reads both.
+  userClips.unshift({ clip: clip.id, title, credit: { es: 'Tu video', en: 'Your video' }, url: null, data: clip });
 }
 
 const cache = new Map();

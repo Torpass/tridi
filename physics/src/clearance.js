@@ -36,14 +36,14 @@ export const HEAD_CLEAR_M = 0.09 + 0.04 + 0.01;
 // (6.7 cm) is behind the body, not in it, and is left alone.
 export const CHEST = { front: 0.084, back: -0.067, halfWidth: 0.108, top: 0.31 };
 export const CHEST_CLEAR_M = 0.04 + 0.01;
-// Two hands touch at 8 cm between their centers (4 cm each); 1 cm of air keeps them from flickering
-// through each other in a clap.
-export const HANDS_APART_M = 0.09;
+// Two Inspire 5-finger hands extend ~16 cm past the wrist and touch at ~13 cm between their centers
+// (6.5 cm each); 1.5 cm of air keeps fingers from overlapping in mid-air during dishwashing/gestures.
+export const HANDS_APART_M = 0.145;
 // Ankles at least this far apart sideways: a foot is ~10 cm wide, so 12 cm leaves 2 cm between
 // them. The G1 stands with 24 cm; a person walks with 5 to 15 cm between the feet' centers lines.
 export const FEET_APART_M = 0.12;
 // The hand is past the wrist: its center sits this share of the forearm's length beyond it.
-const HAND_PAST_WRIST = 0.6;
+const HAND_PAST_WRIST = 0.72;
 // The most a joint opens (rad, 60 degrees for a shoulder, 10 for each hip), searched by 1 degree.
 // 30 degrees was enough for the thighs; a hand brought down onto the crown needs 55 (check-touch).
 const MAX_ARM = Math.PI / 3;

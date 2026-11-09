@@ -1,0 +1,101 @@
+{
+  "id": "h1",
+  "name": "Unitree H1",
+  "mjcf": "unitree_h1/scene.xml",
+  "keyframe": "home",
+  "source": "MuJoCo Menagerie unitree_h1, commit 98a70c5, BSD-3-Clause (Unitree Robotics)",
+  "actuators": {
+    "kind": "torque",
+    "why": "Menagerie's H1 has torque motors. Policies here output joint targets, so the loader turns each motor into a PD servo with these gains, keeping the motor's torque limit. Gains (kp N m/rad, kd N m s/rad) are Unitree's own for H1 in unitree_rl_gym (legged_gym/envs/h1/h1_config.py), matched by joint name.",
+    "pd": [
+      {
+        "match": "hip",
+        "kp": 150,
+        "kd": 2
+      },
+      {
+        "match": "knee",
+        "kp": 200,
+        "kd": 4
+      },
+      {
+        "match": "ankle",
+        "kp": 40,
+        "kd": 2
+      },
+      {
+        "match": "torso",
+        "kp": 300,
+        "kd": 6
+      },
+      {
+        "match": "shoulder",
+        "kp": 150,
+        "kd": 2
+      },
+      {
+        "match": "elbow",
+        "kp": 100,
+        "kd": 2
+      }
+    ]
+  },
+  "points": {
+    "pelvis": {
+      "body": "pelvis"
+    },
+    "torso": {
+      "body": "torso_link"
+    },
+    "head": {
+      "geom": "helmet"
+    },
+    "left_foot": {
+      "body": "left_ankle_link"
+    },
+    "right_foot": {
+      "body": "right_ankle_link"
+    },
+    "left_hand": {
+      "body": "left_elbow_link",
+      "offset": [
+        0.28,
+        0,
+        -0.015
+      ],
+      "why": "H1 has no hand: the end of the forearm (its collision sphere)"
+    },
+    "right_hand": {
+      "body": "right_elbow_link",
+      "offset": [
+        0.28,
+        0,
+        -0.015
+      ],
+      "why": "H1 has no hand: the end of the forearm (its collision sphere)"
+    },
+    "left_knee": {
+      "body": "left_knee_link"
+    },
+    "right_knee": {
+      "body": "right_knee_link"
+    },
+    "left_elbow": {
+      "body": "left_elbow_link"
+    },
+    "right_elbow": {
+      "body": "right_elbow_link"
+    },
+    "left_shoulder": {
+      "body": "left_shoulder_pitch_link"
+    },
+    "right_shoulder": {
+      "body": "right_shoulder_pitch_link"
+    }
+  },
+  "feet": {
+    "left": "left_ankle_link",
+    "right": "right_ankle_link"
+  },
+  "hands": null
+}

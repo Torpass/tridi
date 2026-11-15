@@ -120,7 +120,7 @@ export function dressRocks(view) {
     view,
     {
       sky: { elevation: 14, azimuth: 235, turbidity: 5, rayleigh: 1.9, mieCoefficient: 0.006, mieDirectionalG: 0.84 },
-      fog: { color: 0xa8957f, near: 18, far: 95 },
+      fog: { color: 0xa8957f, near: 10, far: 38 },
       exposure: 0.85,
       envIntensity: 0.35,
       sunColor: 0xffd9b0,
@@ -161,7 +161,35 @@ export function dressRocks(view) {
     };
   }
 
-  // Rocks around: loose ones near the walk, boulders further, cliffs on the horizon.
+  // Engineered 8x8 m rough-terrain test pit border (curb + corner markers framing the heightfield):
+  // eliminates the raw cut at x = ±4 m, z = ±4 m where the MuJoCo hfield ends.
+  const curbMat = new THREE.MeshStandardMaterial({ color: 0x3b352e, roughness: 0.88, metalness: 0.1 });
+  const stripeMat = new THREE.MeshStandardMaterial({ color: 0xc8ff2e, emissive: 0xc8ff2e, emissiveIntensity: 0.25, roughness: 0.4 });
+  const pitHalf = 4.05;
+  const pitSpan = pitHalf * 2;
+  const addCurb = (w, h, d, m, x, y, z) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  };
+  // Side retaining curbs (left/right at x = ±4.05 m) and front/back curbs (z = ±4.05 m, low flush sill in walk lane)
+  addCurb(0.16, 0.09, pitSpan + 0.16, curbMat, -pitHalf, 0.045, 0);
+  addCurb(0.16, 0.09, pitSpan + 0.16, curbMat, pitHalf, 0.045, 0);
+  addCurb(pitSpan + 0.16, 0.04, 0.16, curbMat, 0, 0.02, -pitHalf);
+  addCurb(pitSpan + 0.16, 0.04, 0.16, curbMat, 0, 0.02, pitHalf);
+  // Thin top calibration line + 4 corner survey posts around the 8x8 m stone pit
+  addCurb(0.035, 0.006, pitSpan, stripeMat, -pitHalf, 0.092, 0);
+  addCurb(0.035, 0.006, pitSpan, stripeMat, pitHalf, 0.092, 0);
+  addCurb(pitSpan, 0.006, 0.035, stripeMat, 0, 0.042, -pitHalf);
+  addCurb(pitSpan, 0.006, 0.035, stripeMat, 0, 0.042, pitHalf);
+  for (const [cx, cz] of [[-pitHalf, -pitHalf], [pitHalf, -pitHalf], [-pitHalf, pitHalf], [pitHalf, pitHalf]]) {
+    addCurb(0.22, 0.26, 0.22, curbMat, cx, 0.13, cz);
+    addCurb(0.14, 0.04, 0.14, stripeMat, cx, 0.27, cz);
+  }
+
+  // Rocks around: loose ones near the walk, boulders further, and a continuous 360° cliff ring sealing the horizon.
   const rockMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.92, flatShading: true });
   const shapes = [1, 2, 3, 4, 5].map((seed) => rockGeometry(seed));
   const ring = (r0, r1, sizes, clear) => () => {
@@ -169,13 +197,13 @@ export function dressRocks(view) {
     const r = r0 + (r1 - r0) * Math.sqrt(rand());
     const x = Math.cos(a) * r, z = Math.sin(a) * r;
     const s = sizes[0] + (sizes[1] - sizes[0]) * rand() ** 2;
-    if (inWalk(x, z, clear + s)) return null;
+    if (inWalk(x, z, clear + s) || (Math.abs(x) < pitHalf + s + 0.3 && Math.abs(z) < pitHalf + s + 0.3)) return null;
     return { x, z, y: -0.1 * s, s, h: 0.6 + rand() * 0.6, ry: rand() * Math.PI * 2 };
   };
   shapes.forEach((shape, i) => {
-    scatter(group, shape, rockMaterial, 26, ring(2.6, 14, [0.06, 0.45], 0.3), rand, { shadows: true });
-    scatter(group, shape, rockMaterial, 9, ring(9, 30, [0.8, 2.6], 1), rand);
-    scatter(group, shape, rockMaterial, 5 + (i % 2), ring(38, 80, [7, 18], 0), rand);
+    scatter(group, shape, rockMaterial, 34, ring(4.5, 9.5, [0.08, 0.42], 0.3), rand, { shadows: true });
+    scatter(group, shape, rockMaterial, 18, ring(6.5, 15.5, [0.55, 1.65], 0.6), rand, { shadows: true });
+    scatter(group, shape, rockMaterial, 14 + (i % 2), ring(15, 25, [3.2, 7.4], 0), rand);
   });
 
   return {

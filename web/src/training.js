@@ -124,32 +124,13 @@ export const trainBoxHTML = () => `
 <section class="train-box" hidden aria-live="polite">
   <h2>${T('title')}</h2>
   <div data-train="preloaded" hidden>
-    <p class="train-badge-line"><span class="card-badge trained">${T('preloadedBadge')}</span></p>
     <p class="train-text">${T('preloadedText')}</p>
-    <div class="train-config">
-      <label class="field">${T('cfgSteps')}
-        <select class="train-cfg-steps">
-          <option value="20000000" selected>${T('cfgSteps20')}</option>
-          <option value="50000000">${T('cfgSteps50')}</option>
-          <option value="100000000">${T('cfgSteps100')}</option>
-        </select>
-      </label>
-      <label class="field">${T('cfgPush')}
-        <select class="train-cfg-push">
-          <option value="150">${T('cfgPush150')}</option>
-          <option value="250" selected>${T('cfgPush250')}</option>
-          <option value="350">${T('cfgPush350')}</option>
-        </select>
-      </label>
-      <div class="field train-cfg-worlds">
-        <span>${T('cfgWorlds')}</span>
-        <strong>${T('cfgWorldsVal')}</strong>
-      </div>
-    </div>
-    <div class="train-actions-row">
+    <div class="train-actions-stack">
       <a class="button primary train-example" href="#/delivery">${T('example')}</a>
-      <a class="button" href="#/live">${T('recordNew')}</a>
-      <a class="button" href="#/upload">${T('uploadNew')}</a>
+      <div class="train-actions-subrow">
+        <a class="button" href="#/live">${T('recordNew')}</a>
+        <a class="button" href="#/upload">${T('uploadNew')}</a>
+      </div>
     </div>
   </div>
   <div data-train="idle">

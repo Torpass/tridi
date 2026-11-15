@@ -1,0 +1,29 @@
+<mujoco model="factory_cell scene">
+  <include file="factory_cell.xml"/>
+
+  <visual>
+    <headlight diffuse="0.6 0.6 0.6" ambient="0.3 0.3 0.3" specular="0 0 0"/>
+    <rgba haze="0.15 0.25 0.35 1"/>
+    <global azimuth="135" elevation="-24"/>
+  </visual>
+
+  <asset>
+    <texture type="skybox" builtin="gradient" rgb1="0.25 0.35 0.48" rgb2="0 0 0" width="512" height="3072"/>
+    <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.18 0.22 0.28" rgb2="0.12 0.16 0.22"
+      markrgb="0.7 0.7 0.7" width="300" height="300"/>
+    <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.15"/>
+  </asset>
+
+  <worldbody>
+    <light pos="2 0 2.8" dir="-0.7 0 -0.7"/>
+    <light pos="0 0 3.5" dir="0 0 -1" directional="true"/>
+    <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" contype="1" conaffinity="1"/>
+  </worldbody>
+
+  <!-- qpos: 7 floating_base + conveyor_feed_joint + pusher_slide_joint + sealer_press_joint (10 values) -->
+  <!-- ctrl: conveyor_feed_motor + pusher_slide_motor + sealer_press_motor (3 values) -->
+  <keyframe>
+    <key name="home" qpos="0 0 0.35 1 0 0 0 0 0 0" ctrl="0 0 0"/>
+    <key name="stand" qpos="0 0 0.35 1 0 0 0 0 0 0" ctrl="0 0 0"/>
+  </keyframe>
+</mujoco>

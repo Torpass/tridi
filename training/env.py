@@ -120,7 +120,8 @@ class G1Env:
 
     def __init__(self, seed: int = 0, push: bool = True, push_n: tuple[float, float] = PUSH_N,
                  push_every: tuple[float, float] = PUSH_EVERY_S, stance: Stance | None = None,
-                 robot: str = "g1", sense_velocity: bool = False):
+                 robot: str = "g1", sense_velocity: bool = False,
+                 fault_prob: float = 0.0, fault_scale: tuple[float, float] = (0.35, 0.75)):
         if robot == "g1":
             self.model = mujoco.MjModel.from_xml_path(str(SCENE))
             feet, torso = FEET, "torso_link"
@@ -165,6 +166,20 @@ class G1Env:
         self.next_push = 0
         self.push_left = 0
         self.push_force = np.zeros(3)
+        # Edge-case actuator fault injection (docs/ROADMAP.md, J-2): simulates a weakened or
+        # overheated leg motor by scaling its position gain and force limit to fault_scale.
+        self.fault_prob = float(fault_prob)
+        self.fault_scale = fault_scale
+        self.nominal_gainprm = self.model.actuator_gainprm.copy()
+        self.nominal_biasprm = self.model.actuator_biasprm.copy()
+        self.nominal_forcerange = self.model.actuator_forcerange.copy()
+        self.leg_actuators = [
+            i for i in range(self.nu)
+            if any(k in (mujoco.mj_id2name(self.model, mujoco.mjtObj.mjOBJ_ACTUATOR, i) or "")
+                   for k in ("hip", "knee", "ankle", "wheel"))
+        ] or list(range(self.nu))
+        self.fault_motor = -1
+        self.fault_factor = 1.0
 
     # --- What the policy sees and does (mirrored in the browser) ---------------------------------
 
@@ -206,7 +221,24 @@ class G1Env:
 
     # --- Episode ---------------------------------------------------------------------------------
 
+    def _apply_actuator_fault(self) -> None:
+        """Restore nominal motor parameters, then with probability fault_prob degrade one leg motor."""
+        self.model.actuator_gainprm[:] = self.nominal_gainprm
+        self.model.actuator_biasprm[:] = self.nominal_biasprm
+        self.model.actuator_forcerange[:] = self.nominal_forcerange
+        self.fault_motor = -1
+        self.fault_factor = 1.0
+        if self.fault_prob > 0.0 and self.rng.random() < self.fault_prob:
+            idx = int(self.rng.choice(self.leg_actuators))
+            scale = float(self.rng.uniform(*self.fault_scale))
+            self.model.actuator_gainprm[idx, 0] *= scale
+            self.model.actuator_biasprm[idx, 1] *= scale
+            self.model.actuator_forcerange[idx] *= scale
+            self.fault_motor = idx
+            self.fault_factor = scale
+
     def reset(self) -> np.ndarray:
+        self._apply_actuator_fault()
         d = self.data
         mujoco.mj_resetData(self.model, d)
         d.qpos[:] = self.home_qpos

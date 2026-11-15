@@ -1,0 +1,1101 @@
+{
+  "version": "1.0.0",
+  "description": "Tridi deterministic hardware component catalog (P-1): physical MuJoCo parameters + MCU electrical/timer constraints.",
+  "mcus": {
+    "arduino_uno": {
+      "id": "arduino_uno",
+      "name": "Arduino UNO R3 (ATmega328P)",
+      "category": "mcu",
+      "clock_mhz": 16,
+      "sram_bytes": 2048,
+      "flash_bytes": 32768,
+      "logic_voltage_v": 5.0,
+      "digital_pins": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "analog_pins": [
+        "A0",
+        "A1",
+        "A2",
+        "A3",
+        "A4",
+        "A5"
+      ],
+      "pwm_pins": [
+        3,
+        5,
+        6,
+        9,
+        10,
+        11
+      ],
+      "external_interrupt_pins": [
+        2,
+        3
+      ],
+      "pcint_capable": true,
+      "i2c_pins": {
+        "sda": "A4",
+        "scl": "A5"
+      },
+      "timers": {
+        "Timer0": {
+          "pins": [
+            5,
+            6
+          ],
+          "used_by": [
+            "millis",
+            "micros",
+            "delay"
+          ]
+        },
+        "Timer1": {
+          "pins": [
+            9,
+            10
+          ],
+          "locked_by_libraries": [
+            "Servo.h"
+          ]
+        },
+        "Timer2": {
+          "pins": [
+            3,
+            11
+          ],
+          "locked_by_libraries": [
+            "Tone"
+          ]
+        }
+      },
+      "mujoco": {
+        "mass_kg": 0.025,
+        "size_m": [
+          0.0533,
+          0.0686,
+          0.0032
+        ],
+        "rgba": [
+          0.04,
+          0.42,
+          0.68,
+          1.0
+        ]
+      },
+      "upstream_url": "https://raw.githubusercontent.com/wokwi/wokwi-elements/main/src/arduino-uno-element.ts",
+      "mcu": {
+        "upstream_pins": [
+          {
+            "name": "A5.2",
+            "description": "A5.2"
+          },
+          {
+            "name": "A4.2",
+            "description": "A4.2"
+          },
+          {
+            "name": "AREF",
+            "description": "AREF"
+          },
+          {
+            "name": "GND.1",
+            "description": "GND.1"
+          },
+          {
+            "name": "13",
+            "description": "13"
+          },
+          {
+            "name": "12",
+            "description": "12"
+          },
+          {
+            "name": "11",
+            "description": "11"
+          },
+          {
+            "name": "10",
+            "description": "10"
+          },
+          {
+            "name": "9",
+            "description": "9"
+          },
+          {
+            "name": "8",
+            "description": "8"
+          },
+          {
+            "name": "7",
+            "description": "7"
+          },
+          {
+            "name": "6",
+            "description": "6"
+          },
+          {
+            "name": "5",
+            "description": "5"
+          },
+          {
+            "name": "4",
+            "description": "4"
+          },
+          {
+            "name": "3",
+            "description": "3"
+          },
+          {
+            "name": "2",
+            "description": "2"
+          },
+          {
+            "name": "1",
+            "description": "1"
+          },
+          {
+            "name": "0",
+            "description": "0"
+          },
+          {
+            "name": "IOREF",
+            "description": "IOREF"
+          },
+          {
+            "name": "RESET",
+            "description": "RESET"
+          },
+          {
+            "name": "3.3V",
+            "description": "3.3V"
+          },
+          {
+            "name": "5V",
+            "description": "5V"
+          },
+          {
+            "name": "GND.2",
+            "description": "GND.2"
+          },
+          {
+            "name": "GND.3",
+            "description": "GND.3"
+          },
+          {
+            "name": "VIN",
+            "description": "VIN"
+          },
+          {
+            "name": "A0",
+            "description": "A0"
+          },
+          {
+            "name": "A1",
+            "description": "A1"
+          },
+          {
+            "name": "A2",
+            "description": "A2"
+          },
+          {
+            "name": "A3",
+            "description": "A3"
+          },
+          {
+            "name": "A4",
+            "description": "A4"
+          },
+          {
+            "name": "A5",
+            "description": "A5"
+          }
+        ]
+      },
+      "preview_mjcf": "components/arduino_uno.xml"
+    },
+    "esp32_devkit_v1": {
+      "id": "esp32_devkit_v1",
+      "name": "ESP32 DevKit V1 (Dual-Core Xtensa LX6)",
+      "category": "mcu",
+      "clock_mhz": 240,
+      "sram_bytes": 532480,
+      "flash_bytes": 4194304,
+      "logic_voltage_v": 3.3,
+      "digital_pins": [
+        2,
+        4,
+        5,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        21,
+        22,
+        23,
+        25,
+        26,
+        27,
+        32,
+        33,
+        34,
+        35
+      ],
+      "analog_pins": [
+        "32",
+        "33",
+        "34",
+        "35",
+        "36",
+        "39"
+      ],
+      "pwm_pins": [
+        2,
+        4,
+        5,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        21,
+        22,
+        23,
+        25,
+        26,
+        27,
+        32,
+        33
+      ],
+      "external_interrupt_pins": [
+        2,
+        4,
+        5,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        21,
+        22,
+        23,
+        25,
+        26,
+        27,
+        32,
+        33,
+        34,
+        35
+      ],
+      "pcint_capable": true,
+      "i2c_pins": {
+        "sda": "21",
+        "scl": "22"
+      },
+      "timers": {
+        "LEDC_Group0": {
+          "pins": [
+            2,
+            4,
+            5,
+            12,
+            13,
+            14,
+            15,
+            16
+          ],
+          "locked_by_libraries": []
+        }
+      },
+      "mujoco": {
+        "mass_kg": 0.015,
+        "size_m": [
+          0.028,
+          0.055,
+          0.003
+        ],
+        "rgba": [
+          0.1,
+          0.12,
+          0.15,
+          1.0
+        ]
+      },
+      "upstream_url": "https://raw.githubusercontent.com/wokwi/wokwi-elements/main/src/esp32-devkit-v1-element.ts",
+      "mcu": {
+        "upstream_pins": [
+          {
+            "name": "VIN",
+            "description": "VIN"
+          },
+          {
+            "name": "GND.2",
+            "description": "GND.2"
+          },
+          {
+            "name": "D13",
+            "description": "D13"
+          },
+          {
+            "name": "D12",
+            "description": "D12"
+          },
+          {
+            "name": "D14",
+            "description": "D14"
+          },
+          {
+            "name": "D27",
+            "description": "D27"
+          },
+          {
+            "name": "D26",
+            "description": "D26"
+          },
+          {
+            "name": "D25",
+            "description": "D25"
+          },
+          {
+            "name": "D33",
+            "description": "D33"
+          },
+          {
+            "name": "D32",
+            "description": "D32"
+          },
+          {
+            "name": "D35",
+            "description": "D35"
+          },
+          {
+            "name": "D34",
+            "description": "D34"
+          },
+          {
+            "name": "VN",
+            "description": "VN"
+          },
+          {
+            "name": "VP",
+            "description": "VP"
+          },
+          {
+            "name": "EN",
+            "description": "EN"
+          },
+          {
+            "name": "3V3",
+            "description": "3V3"
+          },
+          {
+            "name": "GND.1",
+            "description": "GND.1"
+          },
+          {
+            "name": "D15",
+            "description": "D15"
+          },
+          {
+            "name": "D2",
+            "description": "D2"
+          },
+          {
+            "name": "D4",
+            "description": "D4"
+          },
+          {
+            "name": "RX2",
+            "description": "RX2"
+          },
+          {
+            "name": "TX2",
+            "description": "TX2"
+          },
+          {
+            "name": "D5",
+            "description": "D5"
+          },
+          {
+            "name": "D18",
+            "description": "D18"
+          },
+          {
+            "name": "D19",
+            "description": "D19"
+          },
+          {
+            "name": "D21",
+            "description": "D21"
+          },
+          {
+            "name": "RX0",
+            "description": "RX0"
+          },
+          {
+            "name": "TX0",
+            "description": "TX0"
+          },
+          {
+            "name": "D22",
+            "description": "D22"
+          },
+          {
+            "name": "D23",
+            "description": "D23"
+          }
+        ]
+      },
+      "preview_mjcf": "components/esp32_devkit_v1.xml"
+    },
+    "plc_s7_1200": {
+      "id": "plc_s7_1200",
+      "name": "Industrial PLC Controller (24V DC DI/DO + PTO)",
+      "category": "mcu",
+      "clock_mhz": 100,
+      "sram_bytes": 102400,
+      "flash_bytes": 4194304,
+      "logic_voltage_v": 24.0,
+      "digital_pins": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13
+      ],
+      "analog_pins": [
+        "AI0",
+        "AI1"
+      ],
+      "pwm_pins": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "external_interrupt_pins": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ],
+      "pcint_capable": true,
+      "timers": {},
+      "mujoco": {
+        "mass_kg": 0.38,
+        "size_m": [
+          0.11,
+          0.1,
+          0.075
+        ],
+        "rgba": [
+          0.22,
+          0.26,
+          0.3,
+          1.0
+        ]
+      },
+      "preview_mjcf": "components/plc_s7_1200.xml"
+    }
+  },
+  "drivers": {
+    "l298n": {
+      "id": "l298n",
+      "name": "L298N Dual H-Bridge Motor Driver",
+      "category": "driver",
+      "channels": 2,
+      "voltage_drop_v": 1.4,
+      "max_current_a": 2.0,
+      "required_pins": [
+        "ENA",
+        "IN1",
+        "IN2",
+        "ENB",
+        "IN3",
+        "IN4"
+      ],
+      "pwm_required_pins": [
+        "ENA",
+        "ENB"
+      ],
+      "mujoco": {
+        "mass_kg": 0.026,
+        "size_m": [
+          0.043,
+          0.043,
+          0.025
+        ],
+        "rgba": [
+          0.82,
+          0.12,
+          0.12,
+          1.0
+        ]
+      },
+      "preview_mjcf": "components/l298n.xml"
+    },
+    "tb6612fng": {
+      "id": "tb6612fng",
+      "name": "TB6612FNG Dual MOSFET Motor Driver",
+      "category": "driver",
+      "channels": 2,
+      "voltage_drop_v": 0.2,
+      "max_current_a": 1.2,
+      "required_pins": [
+        "PWMA",
+        "AIN1",
+        "AIN2",
+        "PWMB",
+        "BIN1",
+        "BIN2",
+        "STBY"
+      ],
+      "pwm_required_pins": [
+        "PWMA",
+        "PWMB"
+      ],
+      "mujoco": {
+        "mass_kg": 0.006,
+        "size_m": [
+          0.02,
+          0.02,
+          0.004
+        ],
+        "rgba": [
+          0.75,
+          0.1,
+          0.15,
+          1.0
+        ]
+      },
+      "preview_mjcf": "components/tb6612fng.xml"
+    }
+  },
+  "actuators": {
+    "tt_gearmotor_200rpm": {
+      "id": "tt_gearmotor_200rpm",
+      "name": "TT DC Gearmotor (3-6V, 200 RPM, 1:48)",
+      "category": "dc_motor",
+      "mujoco": {
+        "joint_type": "hinge",
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "damping": 0.08,
+        "armature": 0.005,
+        "actuator_type": "velocity",
+        "kv": 0.8,
+        "ctrlrange": [
+          -20.94,
+          20.94
+        ],
+        "forcerange": [
+          -3.5,
+          3.5
+        ],
+        "mass_kg": 0.028,
+        "size_m": [
+          0.07,
+          0.0188,
+          0.0225
+        ],
+        "rgba": [
+          0.95,
+          0.8,
+          0.1,
+          1.0
+        ]
+      },
+      "mcu": {
+        "requires_driver": "l298n",
+        "max_rads": 20.94,
+        "deadzone_pwm": 115,
+        "max_pwm": 200,
+        "reason": "TPU tires + 1:48 plastic gearbox + 1.4V L298N drop require PWM >= 115 to overcome static Coulomb friction."
+      },
+      "preview_mjcf": "components/tt_gearmotor_200rpm.xml"
+    },
+    "sg90_servo": {
+      "id": "sg90_servo",
+      "name": "TowerPro SG90 Micro Servo (180° Pan/Tilt)",
+      "category": "servo",
+      "mujoco": {
+        "joint_type": "hinge",
+        "axis": [
+          0,
+          0,
+          1
+        ],
+        "range_rad": [
+          -1.5708,
+          1.5708
+        ],
+        "damping": 0.04,
+        "armature": 0.002,
+        "actuator_type": "position",
+        "kp": 4.5,
+        "ctrlrange": [
+          -1.5708,
+          1.5708
+        ],
+        "forcerange": [
+          -0.6,
+          0.6
+        ],
+        "mass_kg": 0.009,
+        "size_m": [
+          0.0126,
+          0.0232,
+          0.022
+        ],
+        "rgba": [
+          0.1,
+          0.38,
+          0.82,
+          1.0
+        ]
+      },
+      "mcu": {
+        "required_pins": [
+          "SIGNAL"
+        ],
+        "library": "Servo.h",
+        "locks_timer_on_arduino_uno": "Timer1",
+        "disables_pwm_pins_on_arduino_uno": [
+          9,
+          10
+        ],
+        "slew_rate_deg_per_s": 500,
+        "blocking_pitfall_ms": 350,
+        "reason": "Attaching <Servo.h> on ATmega328P hijacks 16-bit Timer1, disabling analogWrite() PWM on pins D9 and D10.",
+        "upstream_pins": [
+          {
+            "name": "GND",
+            "description": "GND"
+          },
+          {
+            "name": "V+",
+            "description": "V+"
+          },
+          {
+            "name": "PWM",
+            "description": "PWM"
+          }
+        ]
+      },
+      "upstream_url": "https://raw.githubusercontent.com/wokwi/wokwi-elements/main/src/servo-element.ts",
+      "preview_mjcf": "components/sg90_servo.xml"
+    },
+    "nema17_stepper": {
+      "id": "nema17_stepper",
+      "name": "NEMA 17 Bipolar Stepper (1.8°, 42x42mm)",
+      "category": "stepper",
+      "mujoco": {
+        "joint_type": "hinge",
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "damping": 0.15,
+        "armature": 0.012,
+        "actuator_type": "velocity",
+        "kv": 2.5,
+        "ctrlrange": [
+          -31.4,
+          31.4
+        ],
+        "forcerange": [
+          -8.0,
+          8.0
+        ],
+        "mass_kg": 0.28,
+        "size_m": [
+          0.042,
+          0.042,
+          0.04
+        ],
+        "rgba": [
+          0.18,
+          0.2,
+          0.24,
+          1.0
+        ]
+      },
+      "mcu": {
+        "required_pins": [
+          "STEP",
+          "DIR",
+          "EN"
+        ],
+        "max_rads": 31.4,
+        "deadzone_pwm": 0,
+        "max_pwm": 255,
+        "upstream_pins": [
+          {
+            "name": "A-",
+            "description": "A-"
+          },
+          {
+            "name": "A+",
+            "description": "A+"
+          },
+          {
+            "name": "B+",
+            "description": "B+"
+          },
+          {
+            "name": "B-",
+            "description": "B-"
+          }
+        ]
+      },
+      "upstream_url": "https://raw.githubusercontent.com/wokwi/wokwi-elements/main/src/stepper-motor-element.ts",
+      "preview_mjcf": "components/nema17_stepper.xml"
+    },
+    "pneumatic_pusher_linear": {
+      "id": "pneumatic_pusher_linear",
+      "name": "Industrial Linear Pusher / Sealer Cylinder (200mm Stroke)",
+      "category": "linear_actuator",
+      "mujoco": {
+        "joint_type": "slide",
+        "axis": [
+          0,
+          1,
+          0
+        ],
+        "range_m": [
+          0.0,
+          0.22
+        ],
+        "damping": 4.0,
+        "armature": 0.05,
+        "actuator_type": "position",
+        "kp": 120.0,
+        "ctrlrange": [
+          0.0,
+          0.22
+        ],
+        "forcerange": [
+          -85.0,
+          85.0
+        ],
+        "mass_kg": 0.45,
+        "size_m": [
+          0.04,
+          0.22,
+          0.04
+        ],
+        "rgba": [
+          0.75,
+          0.78,
+          0.82,
+          1.0
+        ]
+      },
+      "mcu": {
+        "required_pins": [
+          "VALVE_EXTEND",
+          "VALVE_RETRACT"
+        ],
+        "response_delay_ms": 18
+      },
+      "preview_mjcf": "components/pneumatic_pusher_linear.xml"
+    }
+  },
+  "sensors": {
+    "hcsr04_ultrasonic": {
+      "id": "hcsr04_ultrasonic",
+      "name": "HC-SR04 Ultrasonic Distance Sensor (2-400 cm)",
+      "category": "distance_sensor",
+      "mujoco": {
+        "sensor_type": "rangefinder_cone",
+        "fov_rad": 0.84,
+        "ray_angles_rad": [
+          -0.42,
+          -0.28,
+          -0.14,
+          0.0,
+          0.14,
+          0.28,
+          0.42
+        ],
+        "min_range_m": 0.02,
+        "max_range_m": 2.2,
+        "mass_kg": 0.009,
+        "size_m": [
+          0.003,
+          0.045,
+          0.02
+        ],
+        "rgba": [
+          0.08,
+          0.34,
+          0.78,
+          1.0
+        ]
+      },
+      "mcu": {
+        "required_pins": [
+          "TRIG",
+          "ECHO"
+        ],
+        "interrupt_preferred_pin": "ECHO",
+        "blocking_pulsein_timeout_ms": 47.1,
+        "non_blocking_solution": "Hardware INT0/INT1 (D2/D3) or Pin-Change Interrupt (PCINT) measuring echo pulse in microseconds.",
+        "min_ping_interval_ms": 25,
+        "upstream_pins": [
+          {
+            "name": "VCC",
+            "description": "VCC"
+          },
+          {
+            "name": "TRIG",
+            "description": "TRIG"
+          },
+          {
+            "name": "ECHO",
+            "description": "ECHO"
+          },
+          {
+            "name": "GND",
+            "description": "GND"
+          }
+        ]
+      },
+      "upstream_url": "https://raw.githubusercontent.com/wokwi/wokwi-elements/main/src/hc-sr04-element.ts",
+      "preview_mjcf": "components/hcsr04_ultrasonic.xml"
+    },
+    "apds9960_optical": {
+      "id": "apds9960_optical",
+      "name": "APDS-9960 RGB / Gesture / IR Proximity Sensor (I2C)",
+      "category": "optical_sensor",
+      "mujoco": {
+        "sensor_type": "ir_proximity",
+        "max_range_m": 0.58,
+        "register_range": [
+          0,
+          255
+        ],
+        "mass_kg": 0.003,
+        "size_m": [
+          0.014,
+          0.018,
+          0.002
+        ],
+        "rgba": [
+          0.48,
+          0.14,
+          0.62,
+          1.0
+        ]
+      },
+      "mcu": {
+        "bus": "I2C",
+        "i2c_address": "0x39",
+        "proximity_register": "0x9C",
+        "known_clone_chip_ids": [
+          "0xAB",
+          "0x9E",
+          "0xA8"
+        ],
+        "reason": "Clone GY-9960 modules return Chip ID 0x9E at register 0x92 and get rejected by stock SparkFun_APDS9960.h unless read via raw Wire I2C."
+      },
+      "preview_mjcf": "components/apds9960_optical.xml"
+    },
+    "cny70_ir_reflective": {
+      "id": "cny70_ir_reflective",
+      "name": "CNY70 Reflective Optical Sensor (Line / Package Edge)",
+      "category": "optical_sensor",
+      "mujoco": {
+        "sensor_type": "rangefinder",
+        "max_range_m": 0.05,
+        "mass_kg": 0.002,
+        "size_m": [
+          0.007,
+          0.007,
+          0.006
+        ],
+        "rgba": [
+          0.12,
+          0.12,
+          0.14,
+          1.0
+        ]
+      },
+      "mcu": {
+        "required_pins": [
+          "OUT"
+        ],
+        "response_time_ms": 0.5
+      },
+      "preview_mjcf": "components/cny70_ir_reflective.xml"
+    }
+  },
+  "structures": {
+    "wheel_tt_65mm_tpu": {
+      "id": "wheel_tt_65mm_tpu",
+      "name": "65mm Rim + 3D-Printed TPU Tire (for TT Gearmotor)",
+      "category": "wheel",
+      "mujoco": {
+        "radius_m": 0.065,
+        "half_width_m": 0.024,
+        "mass_kg": 0.35,
+        "diaginertia": [
+          0.0008,
+          0.0014,
+          0.0008
+        ],
+        "friction": [
+          1.1,
+          0.01,
+          0.005
+        ]
+      },
+      "preview_mjcf": "components/wheel_tt_65mm_tpu.xml"
+    },
+    "caster_front_patin": {
+      "id": "caster_front_patin",
+      "name": "Front Low-Friction Caster / Skid Support",
+      "category": "caster",
+      "mujoco": {
+        "radius_m": 0.02,
+        "mass_kg": 0.015,
+        "friction": [
+          0.02,
+          0.005,
+          0.001
+        ]
+      },
+      "preview_mjcf": "components/caster_front_patin.xml"
+    }
+  },
+  "presets": {
+    "luigi_lab3": {
+      "id": "luigi_lab3",
+      "name": "Luigi Lab 3 (3-Wheel Differential Drive + Fixed HC-SR04 + APDS-9960)",
+      "board": "arduino_uno",
+      "driver": "l298n",
+      "mjcf": "luigi_lab3/scene.xml",
+      "pinout": {
+        "ENA": 10,
+        "IN1": 9,
+        "IN2": 8,
+        "ENB": 5,
+        "IN3": 7,
+        "IN4": 6,
+        "TRIG": "A0",
+        "ECHO": "A1",
+        "SERVO": null
+      },
+      "actuators": [
+        "tt_gearmotor_200rpm",
+        "tt_gearmotor_200rpm"
+      ],
+      "sensors": [
+        "hcsr04_ultrasonic",
+        "apds9960_optical"
+      ]
+    },
+    "factory_cell": {
+      "id": "factory_cell",
+      "name": "Industrial Packaging Cell (Timed Conveyor + Pneumatic Pusher + Heat Sealer)",
+      "board": "plc_s7_1200",
+      "driver": "l298n",
+      "mjcf": "factory_cell/scene.xml",
+      "pinout": {
+        "CONVEYOR_PTO": 0,
+        "VALVE_PUSHER": 1,
+        "VALVE_SEALER": 2,
+        "SENSOR_ENTRY": 3,
+        "SENSOR_SEALER": 4,
+        "SENSOR_EXIT": 5
+      },
+      "actuators": [
+        "nema17_stepper",
+        "pneumatic_pusher_linear",
+        "pneumatic_pusher_linear"
+      ],
+      "sensors": [
+        "cny70_ir_reflective",
+        "cny70_ir_reflective",
+        "cny70_ir_reflective"
+      ]
+    },
+    "luigi_lab4": {
+      "id": "luigi_lab4",
+      "name": "Luigi Lab 4 (Autonomous Explorer + SG90 Servo Radar Neck on D9)",
+      "board": "arduino_uno",
+      "driver": "l298n",
+      "mjcf": "luigi_lab4/scene.xml",
+      "pinout": {
+        "ENA": 5,
+        "IN1": 7,
+        "IN2": 8,
+        "ENB": 6,
+        "IN3": 11,
+        "IN4": 12,
+        "TRIG": 2,
+        "ECHO": 3,
+        "SERVO": 9
+      },
+      "actuators": [
+        "tt_gearmotor_200rpm",
+        "tt_gearmotor_200rpm",
+        "sg90_servo"
+      ],
+      "sensors": [
+        "hcsr04_ultrasonic"
+      ]
+    }
+  },
+  "synced_at": "2026-11-10T07:28:47.010310+00:00",
+  "upstream_sources": [
+    {
+      "repo": "wokwi/wokwi-elements",
+      "license": "Apache-2.0",
+      "url": "https://github.com/wokwi/wokwi-elements"
+    },
+    {
+      "repo": "google-deepmind/mujoco_menagerie",
+      "license": "BSD-3-Clause",
+      "url": "https://github.com/google-deepmind/mujoco_menagerie"
+    }
+  ]
+}

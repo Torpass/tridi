@@ -1,0 +1,29 @@
+<mujoco model="component_tb6612fng">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.045">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <body name="board_turntable" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.006" diaginertia="0.0001 0.0001 0.0001"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.05" armature="0.002"/>
+        <!-- Compact red/crimson TB6612FNG Dual MOSFET Breakout (20 x 20 mm, scaled 2.5x) -->
+        <geom name="tb_pcb" type="box" pos="0 0 0" size="0.038 0.038 0.0028" group="2" rgba="0.78 0.10 0.16 1"/>
+        <geom name="ssop24_ic" type="box" pos="0 0 0.005" size="0.016 0.012 0.0025" group="2" rgba="0.10 0.11 0.14 1"/>
+        <geom name="smd_cap_1" type="box" pos="-0.020 0.012 0.005" size="0.005 0.003 0.0025" group="2" rgba="0.82 0.68 0.32 1"/>
+        <geom name="smd_cap_2" type="box" pos="-0.020 -0.012 0.005" size="0.005 0.003 0.0025" group="2" rgba="0.82 0.68 0.32 1"/>
+        <geom name="pins_left" type="box" pos="0 0.032 -0.008" size="0.032 0.0025 0.009" group="2" rgba="0.90 0.76 0.20 1"/>
+        <geom name="pins_right" type="box" pos="0 -0.032 -0.008" size="0.032 0.0025 0.009" group="2" rgba="0.90 0.76 0.20 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="demo_actuator" joint="demo_joint" kp="3.0" ctrlrange="-3.14 3.14" ctrllimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>

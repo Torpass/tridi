@@ -1,0 +1,121 @@
+<mujoco model="factory_cell">
+  <compiler angle="radian"/>
+
+  <option timestep="0.002" iterations="50" ls_iterations="10"/>
+
+  <worldbody>
+    <!-- Root body named "pelvis" (with child "torso_link") so Tridi's camera tracker and stats readout work seamlessly -->
+    <body name="pelvis" pos="0 0 0.35">
+      <freejoint name="floating_base"/>
+      <inertial pos="0 0 0" mass="38.0" diaginertia="2.4 4.8 5.6"/>
+
+      <body name="torso_link" pos="0 0 0.15">
+        <inertial pos="0 0 0" mass="0.5" diaginertia="0.01 0.01 0.01"/>
+      </body>
+
+      <!-- Industrial conveyor bed, rollers & stainless steel side rails (rail_left has a reject gate opening at x = +0.62 m) -->
+      <geom name="conveyor_bed" type="box" pos="0 0 0.0" size="0.88 0.24 0.035" group="2" contype="1" conaffinity="1" friction="0.35 0.01 0.005" rgba="0.18 0.20 0.24 1"/>
+      <geom name="conveyor_belt_surface" type="box" pos="0 0 0.038" size="0.85 0.19 0.004" group="2" contype="0" conaffinity="0" rgba="0.11 0.13 0.15 1"/>
+      <geom name="roller_entry" type="cylinder" pos="-0.86 0 0.005" quat="0.7071068 0.7071068 0 0" size="0.034 0.21" group="2" contype="0" conaffinity="0" rgba="0.52 0.56 0.62 1"/>
+      <geom name="roller_exit" type="cylinder" pos="0.86 0 0.005" quat="0.7071068 0.7071068 0 0" size="0.034 0.21" group="2" contype="0" conaffinity="0" rgba="0.52 0.56 0.62 1"/>
+      <geom name="vfd_drive_motor" type="cylinder" pos="0.82 -0.29 -0.04" quat="0.7071068 0.7071068 0 0" size="0.055 0.075" group="2" contype="0" conaffinity="0" rgba="0.16 0.38 0.62 1"/>
+      <geom name="rail_left" type="box" pos="-0.19 0.225 0.065" size="0.69 0.015 0.03" group="2" contype="0" conaffinity="0" rgba="0.72 0.75 0.80 1"/>
+      <geom name="rail_left_exit" type="box" pos="0.81 0.225 0.065" size="0.07 0.015 0.03" group="2" contype="0" conaffinity="0" rgba="0.72 0.75 0.80 1"/>
+      <geom name="rail_right" type="box" pos="0 -0.225 0.065" size="0.88 0.015 0.03" group="2" contype="0" conaffinity="0" rgba="0.72 0.75 0.80 1"/>
+
+      <!-- 4 Heavy industrial support legs + crossbeams resting on the floor (z = -0.35 m in frame) -->
+      <geom name="leg_fl" type="box" pos="0.74 0.20 -0.175" size="0.035 0.035 0.175" group="2" contype="1" conaffinity="1" friction="1.2 0.05 0.01" rgba="0.24 0.27 0.32 1"/>
+      <geom name="leg_fr" type="box" pos="0.74 -0.20 -0.175" size="0.035 0.035 0.175" group="2" contype="1" conaffinity="1" friction="1.2 0.05 0.01" rgba="0.24 0.27 0.32 1"/>
+      <geom name="leg_rl" type="box" pos="-0.74 0.20 -0.175" size="0.035 0.035 0.175" group="2" contype="1" conaffinity="1" friction="1.2 0.05 0.01" rgba="0.24 0.27 0.32 1"/>
+      <geom name="leg_rr" type="box" pos="-0.74 -0.20 -0.175" size="0.035 0.035 0.175" group="2" contype="1" conaffinity="1" friction="1.2 0.05 0.01" rgba="0.24 0.27 0.32 1"/>
+      <geom name="cross_brace_f" type="box" pos="0.74 0 -0.26" size="0.02 0.20 0.02" group="2" contype="0" conaffinity="0" rgba="0.20 0.23 0.28 1"/>
+      <geom name="cross_brace_r" type="box" pos="-0.74 0 -0.26" size="0.02 0.20 0.02" group="2" contype="0" conaffinity="0" rgba="0.20 0.23 0.28 1"/>
+
+      <!-- Station 1 (x = -0.62 m): Dosing Infeed Hopper & Dynamic Checkweigher Load Cell (anchored on rails z=0.095) -->
+      <geom name="infeed_arch_l" type="box" pos="-0.62 0.225 0.19" size="0.055 0.018 0.10" group="2" contype="0" conaffinity="0" rgba="0.62 0.66 0.72 1"/>
+      <geom name="infeed_arch_r" type="box" pos="-0.62 -0.225 0.19" size="0.055 0.018 0.10" group="2" contype="0" conaffinity="0" rgba="0.62 0.66 0.72 1"/>
+      <geom name="infeed_hopper" type="box" pos="-0.62 0 0.29" size="0.105 0.245 0.045" group="2" contype="0" conaffinity="0" rgba="0.76 0.80 0.85 1"/>
+      <geom name="infeed_chute" type="box" pos="-0.62 0 0.21" size="0.075 0.14 0.04" group="2" contype="0" conaffinity="0" rgba="0.52 0.56 0.62 1"/>
+      <geom name="weigh_scale_pad" type="box" pos="-0.38 0 0.043" size="0.12 0.16 0.003" group="2" contype="0" conaffinity="0" rgba="0.22 0.56 0.78 1"/>
+
+      <!-- Station 2 (x = -0.14 m): Overhead Cognex Vision Hood anchored to left rail -->
+      <geom name="vision_mast" type="box" pos="-0.14 0.225 0.24" size="0.02 0.02 0.15" group="2" contype="0" conaffinity="0" rgba="0.28 0.31 0.36 1"/>
+      <geom name="vision_arm" type="box" pos="-0.14 0.11 0.38" size="0.02 0.135 0.016" group="2" contype="0" conaffinity="0" rgba="0.28 0.31 0.36 1"/>
+      <geom name="vision_camera" type="box" pos="-0.14 0 0.345" size="0.032 0.032 0.024" group="2" contype="0" conaffinity="0" rgba="0.95 0.80 0.12 1"/>
+      <geom name="vision_lens" type="cylinder" pos="-0.14 0 0.314" size="0.016 0.010" group="2" contype="0" conaffinity="0" rgba="0.12 0.78 0.96 1"/>
+
+      <!-- Station 3 (x = +0.12 m): Overhead Gantry Arch for Timed Sealing + Fixed Cylinder Barrel + Andon Stack Light -->
+      <geom name="gantry_pillar_l" type="box" pos="0.12 0.225 0.245" size="0.035 0.022 0.155" group="2" contype="0" conaffinity="0" rgba="0.95 0.52 0.12 1"/>
+      <geom name="gantry_pillar_r" type="box" pos="0.12 -0.225 0.245" size="0.035 0.022 0.155" group="2" contype="0" conaffinity="0" rgba="0.95 0.52 0.12 1"/>
+      <geom name="gantry_beam" type="box" pos="0.12 0 0.415" size="0.05 0.248 0.025" group="2" contype="0" conaffinity="0" rgba="0.95 0.52 0.12 1"/>
+      <geom name="sealer_barrel_fixed" type="cylinder" pos="0.12 0 0.345" size="0.028 0.055" group="2" contype="0" conaffinity="0" rgba="0.32 0.36 0.42 1"/>
+      <geom name="andon_pole" type="cylinder" pos="0.12 0.21 0.465" size="0.008 0.03" group="2" contype="0" conaffinity="0" rgba="0.65 0.68 0.72 1"/>
+      <geom name="andon_green" type="cylinder" pos="0.12 0.21 0.510" size="0.018 0.016" group="2" contype="0" conaffinity="0" rgba="0.16 0.88 0.38 1"/>
+      <geom name="andon_amber" type="cylinder" pos="0.12 0.21 0.542" size="0.018 0.016" group="2" contype="0" conaffinity="0" rgba="0.98 0.74 0.12 1"/>
+      <geom name="andon_red" type="cylinder" pos="0.12 0.21 0.574" size="0.018 0.016" group="2" contype="0" conaffinity="0" rgba="0.95 0.22 0.18 1"/>
+
+      <!-- Station 4 (x = +0.62..1.35 m): Pneumatic Reject Pusher + Side Reject Tray + Outfeed Chute + Pallet with 6 Stackable Boxes -->
+      <geom name="pusher_mount_bracket" type="box" pos="0.62 -0.265 0.045" size="0.065 0.045 0.045" group="2" contype="0" conaffinity="0" rgba="0.24 0.27 0.32 1"/>
+      <geom name="pusher_cylinder_body" type="box" pos="0.62 -0.295 0.095" size="0.048 0.065 0.032" group="2" contype="0" conaffinity="0" rgba="0.18 0.46 0.78 1"/>
+      <geom name="reject_tray_bed" type="box" pos="0.62 0.36 0.02" size="0.12 0.14 0.012" group="2" contype="0" conaffinity="0" rgba="0.45 0.18 0.18 1"/>
+      <geom name="reject_tray_wall" type="box" pos="0.62 0.49 0.055" size="0.12 0.012 0.035" group="2" contype="0" conaffinity="0" rgba="0.75 0.22 0.18 1"/>
+      <geom name="reject_tray_leg" type="box" pos="0.62 0.40 -0.165" size="0.03 0.03 0.175" group="2" contype="0" conaffinity="0" rgba="0.24 0.27 0.32 1"/>
+      <geom name="outfeed_ramp" type="box" pos="0.98 0 -0.065" quat="0.9588197 0 0.2840153 0" size="0.14 0.18 0.012" group="2" contype="0" conaffinity="0" rgba="0.58 0.62 0.68 1"/>
+      <geom name="outfeed_ramp_leg" type="box" pos="0.98 0 -0.21" size="0.025 0.14 0.13" group="2" contype="0" conaffinity="0" rgba="0.24 0.27 0.32 1"/>
+      <geom name="euro_pallet" type="box" pos="1.30 0 -0.315" size="0.22 0.26 0.035" group="2" contype="0" conaffinity="0" rgba="0.68 0.48 0.26 1"/>
+      <geom name="pallet_box_1" type="box" pos="1.21 -0.085 -0.228" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+      <geom name="pallet_box_2" type="box" pos="1.21 0.085 -0.228" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+      <geom name="pallet_box_3" type="box" pos="1.38 -0.085 -0.228" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+      <geom name="pallet_box_4" type="box" pos="1.38 0.085 -0.228" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+      <geom name="pallet_box_5" type="box" pos="1.21 -0.085 -0.126" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+      <geom name="pallet_box_6" type="box" pos="1.21 0.085 -0.126" size="0.072 0.062 0.05" group="2" contype="0" conaffinity="0" rgba="0.82 0.62 0.36 1"/>
+
+      <!-- NEMA 12 Industrial PLC & VFD Control Cabinet + Floor Pedestal + HMI Panel -->
+      <geom name="plc_pedestal" type="box" pos="-0.32 0.44 -0.335" size="0.23 0.12 0.015" group="2" contype="0" conaffinity="0" rgba="0.18 0.20 0.24 1"/>
+      <geom name="plc_cabinet" type="box" pos="-0.32 0.44 -0.01" size="0.22 0.11 0.31" group="2" contype="0" conaffinity="0" rgba="0.26 0.29 0.34 1"/>
+      <geom name="plc_door_seam" type="box" pos="-0.32 0.328 0.02" size="0.19 0.004 0.26" group="2" contype="0" conaffinity="0" rgba="0.34 0.38 0.44 1"/>
+      <geom name="hmi_bezel" type="box" pos="-0.32 0.322 0.14" size="0.11 0.008 0.075" group="2" contype="0" conaffinity="0" rgba="0.10 0.12 0.15 1"/>
+      <geom name="hmi_screen" type="box" pos="-0.32 0.314 0.14" size="0.095 0.004 0.06" group="2" contype="0" conaffinity="0" rgba="0.14 0.62 0.86 1"/>
+      <geom name="estop_button" type="cylinder" pos="-0.44 0.32 0.01" quat="0.7071068 0.7071068 0 0" size="0.016 0.012" group="2" contype="0" conaffinity="0" rgba="0.92 0.18 0.16 1"/>
+
+      <!-- Optical photoelectric sensors mounted directly on side rails (PE-01 entry, PE-02 sealer, PE-03 exit) -->
+      <geom name="sensor_entry_housing" type="cylinder" pos="-0.38 0.225 0.108" quat="0.7071068 0.7071068 0 0" size="0.014 0.024" group="2" contype="0" conaffinity="0" rgba="0.10 0.58 0.92 1"/>
+      <geom name="sensor_entry_reflector" type="box" pos="-0.38 -0.225 0.108" size="0.015 0.010 0.016" group="2" contype="0" conaffinity="0" rgba="0.92 0.94 0.96 1"/>
+      <geom name="sensor_sealer_housing" type="cylinder" pos="0.12 0.225 0.108" quat="0.7071068 0.7071068 0 0" size="0.014 0.024" group="2" contype="0" conaffinity="0" rgba="0.10 0.85 0.42 1"/>
+      <geom name="sensor_sealer_reflector" type="box" pos="0.12 -0.225 0.108" size="0.015 0.010 0.016" group="2" contype="0" conaffinity="0" rgba="0.92 0.94 0.96 1"/>
+      <geom name="sensor_exit_housing" type="cylinder" pos="0.46 0.225 0.108" quat="0.7071068 0.7071068 0 0" size="0.014 0.024" group="2" contype="0" conaffinity="0" rgba="0.95 0.78 0.12 1"/>
+      <geom name="sensor_exit_reflector" type="box" pos="0.46 -0.225 0.108" size="0.015 0.010 0.016" group="2" contype="0" conaffinity="0" rgba="0.92 0.94 0.96 1"/>
+
+      <!-- Actuator 1: Conveyor package carrier slide (travels smoothly along X, slides down ramp or into reject tray) -->
+      <body name="conveyor_carrier_link" pos="-0.45 0 0.095">
+        <inertial pos="0 0 0" mass="0.65" diaginertia="0.002 0.002 0.002"/>
+        <joint name="conveyor_feed_joint" type="slide" axis="1 0 0" range="-0.25 1.85" damping="28.0" armature="0.02"/>
+        <geom name="package_box" type="box" size="0.075 0.065 0.052" group="2" contype="0" conaffinity="0" friction="0.6 0.01 0.005" rgba="0.82 0.62 0.36 1"/>
+        <geom name="package_label" type="box" pos="0 0 0.053" size="0.045 0.04 0.002" group="2" contype="0" conaffinity="0" rgba="0.96 0.96 0.94 1"/>
+      </body>
+
+      <!-- Actuator 2: Pneumatic reject pusher at Station 4 (x = +0.62 m), pushes defective boxes in +Y into reject_tray_bed -->
+      <body name="pusher_gate_link" pos="0.62 -0.21 0.095">
+        <inertial pos="0 0.02 0" mass="0.45" diaginertia="0.001 0.001 0.001"/>
+        <joint name="pusher_slide_joint" type="slide" axis="0 1 0" range="0.0 0.48" damping="18.0" armature="0.02"/>
+        <geom name="pusher_rod" type="cylinder" pos="0 -0.075 0" quat="0.7071068 0.7071068 0 0" size="0.013 0.090" group="2" contype="0" conaffinity="0" rgba="0.80 0.82 0.86 1"/>
+        <geom name="pusher_plate" type="box" pos="0 0.015 0" size="0.062 0.009 0.042" group="2" contype="0" conaffinity="0" rgba="0.92 0.24 0.18 1"/>
+      </body>
+
+      <!-- Actuator 3: Timed vertical heat-sealer / capping press head at Station 3 (x = +0.12 m) -->
+      <!-- Piston rod stays inside sealer_barrel_fixed; extending +0.095 m kisses the box top at z = 0.147 m without squashing -->
+      <body name="sealer_head_link" pos="0.12 0 0.28">
+        <inertial pos="0 0 -0.02" mass="0.55" diaginertia="0.001 0.001 0.001"/>
+        <joint name="sealer_press_joint" type="slide" axis="0 0 -1" range="0.0 0.16" damping="22.0" armature="0.02"/>
+        <geom name="sealer_piston" type="cylinder" pos="0 0 0.075" size="0.015 0.085" group="2" contype="0" conaffinity="0" rgba="0.78 0.80 0.84 1"/>
+        <geom name="sealer_die" type="box" pos="0 0 -0.018" size="0.070 0.065 0.018" group="2" contype="0" conaffinity="0" rgba="0.15 0.68 0.88 1"/>
+      </body>
+    </body>
+  </worldbody>
+
+  <actuator>
+    <position name="conveyor_feed_motor" joint="conveyor_feed_joint" kp="280.0" ctrlrange="-0.25 1.85" ctrllimited="true" forcerange="-180 180" forcelimited="true"/>
+    <position name="pusher_slide_motor" joint="pusher_slide_joint" kp="220.0" ctrlrange="0.0 0.48" ctrllimited="true" forcerange="-140 140" forcelimited="true"/>
+    <position name="sealer_press_motor" joint="sealer_press_joint" kp="240.0" ctrlrange="0.0 0.16" ctrllimited="true" forcerange="-160 160" forcelimited="true"/>
+  </actuator>
+</mujoco>

@@ -1,0 +1,29 @@
+<mujoco model="component_nema17_stepper">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.07">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <geom name="nema_flange_front" type="box" pos="0 0 0.032" size="0.042 0.042 0.008" group="2" rgba="0.78 0.80 0.84 1"/>
+      <geom name="nema_stator_stack" type="box" pos="0 0 0" size="0.041 0.041 0.024" group="2" rgba="0.16 0.18 0.22 1"/>
+      <geom name="nema_flange_rear" type="box" pos="0 0 -0.032" size="0.042 0.042 0.008" group="2" rgba="0.78 0.80 0.84 1"/>
+      <geom name="nema_pilot_ring" type="cylinder" pos="0 0 0.042" size="0.022 0.003" group="2" rgba="0.82 0.84 0.88 1"/>
+      <body name="rotor_link" pos="0 0 0.055">
+        <inertial pos="0 0 0" mass="0.08" diaginertia="0.0002 0.0002 0.0003"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" damping="0.15" armature="0.012"/>
+        <geom name="rotor_shaft" type="cylinder" pos="0 0 0.01" size="0.005 0.022" group="2" rgba="0.88 0.90 0.92 1"/>
+        <geom name="pulley_disc" type="cylinder" pos="0 0 0.022" size="0.026 0.006" group="2" rgba="0.95 0.52 0.12 1"/>
+        <geom name="index_pin" type="sphere" pos="0.020 0 0.029" size="0.005" group="2" rgba="0.98 0.98 0.98 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <velocity name="demo_actuator" joint="demo_joint" kv="2.5" ctrlrange="-31.4 31.4" ctrllimited="true" forcerange="-8 8" forcelimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>

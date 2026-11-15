@@ -1,0 +1,24 @@
+{
+  "id": "g1-dedos",
+  "robot": "unitree_g1",
+  "robot_package": "g1",
+  "mjcf": "unitree_g1/scene_mjx.xml",
+  "obs_dim": 190,
+  "nu": 29,
+  "task": "mimic",
+  "trained_on": [
+    "clip_dedos-01-gvhmr-balanced"
+  ],
+  "motion": "clip_dedos-01-gvhmr-balanced",
+  "lookahead_s": [
+    0.1,
+    0.25
+  ],
+  "worlds": [
+    "plano"
+  ],
+  "followed_s": 12.42,
+  "duration_s": 12.4,
+  "steps": 6000640,
+  "created_at": "2026-11-06T17:29:11+00:00"
+}

@@ -13,10 +13,18 @@ const SCENES = {
   vereda: { es: 'Vereda', en: 'Sidewalk' },
 };
 const ROBOTS = {
-  unitree_g1: { es: 'Unitree G1 (29 motores + manos 5 dedos)', en: 'Unitree G1 (29 motors + 5-finger hands)' },
+  unitree_g1: { es: 'Humanoide Unitree G1 (29 motores + manos 5 dedos)', en: 'Unitree G1 Humanoid (29 motors + 5-finger hands)' },
   luigi_lab3: {
-    es: 'Robot Explorador Lab III — Luigi (Arduino UNO + HC-SR04 + APDS-9960)',
-    en: 'Lab III Explorer Robot — Luigi (Arduino UNO + HC-SR04 + APDS-9960)',
+    es: 'Rover Luigi v1 — Sensores Fijos (Arduino UNO + HC-SR04 + APDS-9960)',
+    en: 'Luigi Rover v1 — Fixed Sensors (Arduino UNO + HC-SR04 + APDS-9960)',
+  },
+  luigi_lab4: {
+    es: 'Rover Luigi v2 — Radar Servo Móvil (Arduino UNO + SG90 + HC-SR04)',
+    en: 'Luigi Rover v2 — Pan Servo Radar (Arduino UNO + SG90 + HC-SR04)',
+  },
+  factory_cell: {
+    es: 'Celda Industrial — Empaquetadora Cronometrada (PLC S7-1200 / PackML)',
+    en: 'Industrial Cell — Timed Packaging Line (S7-1200 PLC / PackML)',
   },
   unitree_h1: { es: 'Unitree H1 (19 motores, open-source)', en: 'Unitree H1 (19 motors, open-source)' },
 };
@@ -25,12 +33,25 @@ const LEVELS = {
     es: 'Robot Lab III (Luigi) · Exploración y evasión con física (5 M pasos, 200 RPM)',
     en: 'Lab III Robot (Luigi) · Physics exploration & obstacle avoidance (5M steps, 200 RPM)',
   },
+  'luigi-lab4': {
+    es: 'Robot Lab IV (Luigi) · Escaneo activo SG90 + evasión continua 50 Hz (10 M pasos)',
+    en: 'Lab IV Robot (Luigi) · Active SG90 radar sweep + 50 Hz continuous avoidance (10M steps)',
+  },
+  'factory-cell': {
+    es: 'Celda Industrial · Sincronización por sensores ópticos (0 % merma frente a falla de cinta)',
+    en: 'Industrial Cell · Optical-sensor synchronization (0% waste under belt slip fault)',
+  },
   'g1-stand-step-0': { es: 'Sin entrenar', en: 'Untrained' },
   'g1-stand-step-3000000': { es: '3 millones de pasos', en: '3 million steps' },
   'g1-stand-step-10000000': { es: '10 millones de pasos', en: '10 million steps' },
   'g1-stand-step-20000768': { es: '20 millones de pasos', en: '20 million steps' },
+  'g1-stand-step-100000000': { es: '100 millones de pasos (4 de 4 empujones)', en: '100 million steps (4 of 4 pushes)' },
   'g1-stand-v2': { es: '40 millones de pasos (4 de 4 empujones, girando)', en: '40 million steps (4 of 4 pushes, turning)' },
   'g1-stand-quiet': { es: '48 millones de pasos, quieta (3 de 4 empujones)', en: '48 million steps, still (3 of 4 pushes)' },
+  'g1-stand-step-300000000': {
+    es: '300 millones de pasos (4 mundos, 4 de 4 empujones)',
+    en: '300 million steps (4 worlds, 4 of 4 pushes)',
+  },
   'g1-stand': { es: '60 millones de pasos', en: '60 million steps' },
   'g1-walk': {
     es: 'Caminar imitando el video, con física (65 % de empujones)',

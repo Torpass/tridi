@@ -13,9 +13,11 @@ import { WORLDS } from 'tridi-physics';
 import { dressWorld } from '../looks/index.js';
 import { loader } from '../loader.js';
 import { attachRobot, onRobotProgress, robotView } from '../robot-host.js';
-import { LANGS, escapeHtml, lang, langSwitch, onLang } from '../i18n.js';
+import { LANGS, escapeHtml, lang, onLang } from '../i18n.js';
+import { appHeaderHTML, mountAppHeader } from '../header.js';
 import { clipName, spans as langSpans, worldName } from '../strings-names.js';
-import { A, FILE_WHAT_EN, L, T, WORLD_WHY_EN, t as tl } from './strings/delivery.js';
+import { VIDEOS } from '../video-overlay.js';
+import { A, FILE_WHAT_EN, L, T, t as tl } from './strings/delivery.js';
 import './delivery.css';
 
 export { title } from './strings/delivery.js';
@@ -31,8 +33,49 @@ const FILE_URLS = import.meta.glob(['../../../data/deliveries/*/*', '!../../../d
   import: 'default',
 });
 
-// #/delivery with no id opens the walk, the first clip with a delivery.
-const DEFAULT_CLIP = 'clip_2026-10-23_caminar-perfil_01';
+// #/delivery with no id opens the v2 GVHMR walk, the canonical 50M-step delivery.
+const DEFAULT_CLIP = 'clip_caminar-perfil-gvhmr';
+const SWITCHER_ORDER = [
+  'clip_caminar-perfil-gvhmr',
+  'clip_correr-perfil-gvhmr',
+  'clip_frente-04-gvhmr',
+  'clip_bailar-01-gvhmr',
+  'clip_jacks-01-gvhmr',
+  'clip_sentarse-02-gvhmr',
+  'clip_saludar-02-gvhmr',
+  'clip_dedos-01-gvhmr',
+  'clip_2026-10-23_caminar-perfil_01',
+];
+
+function switcherLabel(item, l = lang()) {
+  const tObj = clipName({ clip: item.clip_id, title: item.title || item.clip_id }).title;
+  const ver = item.clip_id.includes('gvhmr') ? 'v2 GVHMR' : 'v1 MediaPipe';
+  const stepsM = item.policy?.steps
+    ? `${Math.round(item.policy.steps / 1e6)}M ${l === 'es' ? 'pasos' : 'steps'}`
+    : (item.policy?.id ?? item.clip_id);
+  return `${tObj[l]} · ${ver} · ${stepsM}`;
+}
+// Bounded LRU cache (max 3 entries) for parsed replay.json payloads (~2.1-2.9 MB each) so switching
+// between deliveries is instant without unbounded RAM growth.
+const MAX_CACHED_REPLAYS = 3;
+const replayCache = new Map();
+
+function getCachedReplay(replayUrl) {
+  if (!replayCache.has(replayUrl)) return null;
+  const entry = replayCache.get(replayUrl);
+  replayCache.delete(replayUrl);
+  replayCache.set(replayUrl, entry);
+  return entry;
+}
+
+function setCachedReplay(replayUrl, entry) {
+  if (replayCache.has(replayUrl)) replayCache.delete(replayUrl);
+  else if (replayCache.size >= MAX_CACHED_REPLAYS) {
+    replayCache.delete(replayCache.keys().next().value);
+  }
+  replayCache.set(replayUrl, entry);
+}
+
 // Clip ids as data/server.py makes them (its CLIP_ID); nothing else is asked of the server.
 const CLIP_ID = /^clip_[A-Za-z0-9_-]+$/;
 // A file of a delivery: a bare name, so it can only point inside the delivery's folder.
@@ -48,9 +91,6 @@ const FIRST_ROW_S = 1 / DATASET_HZ;
 // `seconds` is a whole number of dataset rows written with two decimals: half a row of slack keeps
 // that rounding from passing for an extra replay row.
 const ROW_SLACK_S = 0.5 / DATASET_HZ;
-// The first random push of a test episode comes 2 to 4 s after it starts (training/env.py,
-// PUSH_EVERY_S): until then, a world that varies nothing but its pushes runs the same episode.
-const FIRST_PUSH_S = 2;
 // What ends a test episode (training/imitate.py MimicEnv.step): the pelvis more than 0.6 m from the
 // reference on the floor plane, or a fall, which training/env.py calls the pelvis below 0.5 m or
 // the torso tilted past 60 degrees (its "up" below 0.5).
@@ -167,15 +207,20 @@ export function mount(root, { api }, [param] = []) {
   document.documentElement.classList.add('is-delivery');
   root.innerHTML = `
     <section class="dl">
-      <header class="dl-top"><a class="dl-back" href="#/">← Tridi</a><p class="dl-kicker">${T('kicker')} · <span class="dl-mono">${esc(clipId)}</span></p>${langSwitch('dl-lang')}</header>
+      ${appHeaderHTML({ current: 'delivery' })}
       <p class="dl-message" role="status">${T('searching')}</p>
     </section>`;
+  let unmountHeader = mountAppHeader(root);
   const abort = new AbortController();
   let unmount = null;
   let gone = false;
   loadDelivery(clipId, api, abort.signal)
     .then((delivery) => {
-      if (!gone) unmount = showDelivery(root, delivery, abort.signal);
+      if (!gone) {
+        unmountHeader?.();
+        unmountHeader = null;
+        unmount = showDelivery(root, delivery, abort.signal);
+      }
     })
     .catch((error) => {
       if (gone) return;
@@ -190,12 +235,13 @@ export function mount(root, { api }, [param] = []) {
   return () => {
     gone = true;
     abort.abort();
+    unmountHeader?.();
     unmount?.();
     document.documentElement.classList.remove('is-delivery');
   };
 }
 
-function showDelivery(root, { manifest: m, source, url }, signal) {
+function showDelivery(root, { manifest: m, url }, signal) {
   const duration = m.duration_s;
   const policy = m.policy ?? {};
   const episodes = m.episodes.map((ep, index) => ({ ...ep, index }));
@@ -215,57 +261,36 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     return [key, [Math.min(...values), Math.max(...values)]];
   }));
   const followed = policy.followed_s ?? null;
-  const created = m.created_at ? new Date(m.created_at) : null;
-  const createdText = created && !Number.isNaN(created.getTime())
-    ? (l) => `${created.toLocaleDateString(l, { day: 'numeric', month: 'short', year: 'numeric' })} · ${pad2(created.getHours())}:${pad2(created.getMinutes())}`
-    : () => '—';
-  const trainedWorlds = worlds.filter((world) => trained.has(world.id));
-  const testOnly = worlds.length - trainedWorlds.length;
-  const clipTitle = clipName({ clip: m.clip_id, title: m.title || m.clip_id }).title; // escaped
-  const bundledManifests = Object.values(MANIFESTS);
+  const bundledManifests = Object.values(MANIFESTS).sort((a, b) => {
+    const ia = SWITCHER_ORDER.indexOf(a.clip_id);
+    const ib = SWITCHER_ORDER.indexOf(b.clip_id);
+    return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
+  });
   const switcherOptions = bundledManifests.some((b) => b.clip_id === m.clip_id) ? bundledManifests : [m, ...bundledManifests];
-
-  // The status line, put together in each language.
-  const statusIn = (l) => [
-    followed !== null ? L('statusFollow', { a: num(followed, 2, l), b: num(duration, 2, l), p: Math.round((100 * followed) / duration) }, l) : null,
-    trainedWorlds.length
-      ? L('statusTrained', { worlds: esc(trainedWorlds.map((w) => worldTitle(w, l)).join(', ').toLowerCase()) }, l) + (testOnly ? L('statusTestOnly', { n: testOnly }, l) : '')
-      : null,
-    L('statusCompleted', { a: completed, b: total }, l),
-  ].filter(Boolean).join(' · ');
+  const sourceVideo = VIDEOS[m.clip_id] ?? null;
+  const sourceVideoUrl = sourceVideo?.video ? `${import.meta.env.BASE_URL}${sourceVideo.video}` : null;
 
   root.innerHTML = `
     <section class="dl">
       <div class="dl-screen">
-      <header class="dl-top">
-        <a class="dl-back" href="#/" ${A({ 'aria-label': 'backHome' })}>← Tridi</a>
-        <div class="dl-name">
-          <p class="dl-kicker">${T('kicker')}${source === 'server' ? T('fromServer') : ''}</p>
-          <h1>${langSpans(clipTitle)}</h1>
+      ${appHeaderHTML({ current: 'delivery' })}
+      <div class="dl-toolbar">
+        <label class="dl-switcher-wrap">
+          <span class="dl-switcher-label">${T('clip')}</span>
+          <select class="dl-switcher" ${A({ 'aria-label': 'switchClipAria' })}>
+            ${switcherOptions.map((item) => `<option value="${esc(item.clip_id)}" ${item.clip_id === m.clip_id ? 'selected' : ''}>${esc(switcherLabel(item))}</option>`).join('')}
+          </select>
+        </label>
+        <div class="dl-meta-pills">
+          <span class="dl-pill"><small>${T('policy')}</small> <b class="dl-mono">${esc(policy.id ?? '—')}</b></span>
+          <span class="dl-pill"><small>${T('practice')}</small> <b>${policy.steps ? T('mSteps', { n: N(policy.steps / 1e6, 0) }) : '—'}</b></span>
+          <span class="dl-pill"><small>${T('follows')}</small> <b>${followed !== null ? T('sOfS', { a: N(followed, 2), b: N(duration, 2) }) : '—'}</b></span>
+          <span class="dl-pill"><small>${T('state')}</small> <b>${T('completeN', { a: completed, b: total })}</b></span>
         </div>
-        <dl class="dl-meta">
-          <div><dt>${T('clip')}</dt><dd>
-            <select class="dl-switcher" ${A({ 'aria-label': 'switchClipAria' })}>
-              ${switcherOptions.map((item) => {
-                const tObj = clipName({ clip: item.clip_id, title: item.title || item.clip_id }).title;
-                return `<option value="${esc(item.clip_id)}" ${item.clip_id === m.clip_id ? 'selected' : ''}>${esc(tObj[lang()])} (${esc(item.policy?.id ?? item.clip_id)})</option>`;
-              }).join('')}
-            </select>
-          </dd></div>
-          <div><dt>${T('policy')}</dt><dd><span class="dl-mono">${esc(policy.id ?? '—')}</span>${policy.task === 'mimic' ? T('mimic') : ''}</dd></div>
-          <div><dt>${T('practice')}</dt><dd>${policy.steps ? T('mSteps', { n: N(policy.steps / 1e6, 0) }) : '—'}</dd></div>
-          <div class="dl-follow"><dt>${T('follows')}</dt><dd>${followed !== null ? T('sOfS', { a: N(followed, 2), b: N(duration, 2) }) : '—'}
-            <i class="dl-meter" aria-hidden="true"><b style="width:${followed !== null ? Math.min(100, (100 * followed) / duration) : 0}%"></b></i></dd></div>
-          <div><dt>${T('created')}</dt><dd>${langSpans(Object.fromEntries(LANGS.map((l) => [l, esc(createdText(l))])))}</dd></div>
-        </dl>
-        <button class="dl-jump" type="button" data-jump="dl-files">${T('downloads', { n: m.files?.length ?? 0 })}</button>
-        ${langSwitch('dl-lang')}
-      </header>
-      <p class="dl-status"><b>${T('state')}</b> ${langSpans(Object.fromEntries(LANGS.map((l) => [l, statusIn(l)])))}</p>
-      <div class="dl-explain">
-        <div class="dl-explain-item"><strong>${T('expClipHead')}</strong><span>${T('expClipBody')}</span></div>
-        <div class="dl-explain-item"><strong>${T('expPolicyHead')}</strong><span>${T('expPolicyBody')}</span></div>
-        <div class="dl-explain-item"><strong>${T('expPracticeHead')}</strong><span>${T('expPracticeBody')}</span></div>
+        <button class="dl-jump" type="button" data-jump="dl-files">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7.5 8 11l3.5-3.5M3 13.5h10"/></svg>
+          <span>${T('downloadsBtn')}</span>
+        </button>
       </div>
 
       <div class="dl-main">
@@ -275,7 +300,15 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
             <div class="dl-boot">${loader()}<i class="dl-meter"><b class="dl-boot-fill"></b></i><span class="dl-boot-text">${T('booting')}</span></div>
             <p class="dl-hud dl-hud-left"><span class="dl-hud-ep">—</span><span class="dl-hud-state"></span></p>
             <p class="dl-hud dl-hud-right"><span class="dl-feet" ${A({ title: 'feetTitle' })}><i data-foot="left"></i>${T('footLeft')} <i data-foot="right"></i>${T('footRight')}</span><span class="dl-hud-t">t ${num(0, 2)} s</span></p>
-            <p class="dl-hud dl-hud-note"><span>${T('hudNote')}</span></p>
+            ${sourceVideoUrl ? `
+            <div class="dl-source-pip" title="Click to expand/collapse source video">
+              <div class="dl-source-head">
+                <span class="dl-source-dot"></span>
+                <span class="dl-source-tag">${langSpans({ es: 'Video original', en: 'Source video' })}</span>
+                <span class="dl-source-toggle" aria-hidden="true">⤢</span>
+              </div>
+              <video class="dl-source-video" src="${esc(sourceVideoUrl)}" autoplay muted loop playsinline preload="metadata"></video>
+            </div>` : ''}
           </div>
           <div class="dl-transport">
             <button class="dl-play" type="button" aria-label="${tl('pause')}"><svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-pause" d="M4 3h3v10H4zM9 3h3v10H9z"/><path class="i-play" d="M4 2.5v11l9.5-5.5z"/></svg></button>
@@ -311,7 +344,6 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
                 </div>
               </div>`).join('')}
             </div>
-            <p class="dl-legend"><i class="dl-legend-bar" aria-hidden="true"></i>${T('legend', { d: N(duration, 2) })}</p>
           </section>
 
           <section class="dl-win dl-episode" aria-live="polite">
@@ -319,9 +351,6 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
             <div class="dl-ep-body">
               <dl class="dl-stats"></dl>
               <ul class="dl-params"></ul>
-              <p class="dl-ep-end"></p>
-              <p class="dl-ep-peak"></p>
-              <p class="dl-ep-why"></p>
             </div>
           </section>
         </div>
@@ -347,10 +376,6 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
       </div>
 
       <div class="dl-more">
-        <section class="dl-win dl-train" ${A({ 'aria-label': 'trainAria' })}>
-          <div class="dl-bar"><span>${T('trainBar')}</span><span>${esc(policy.id ?? '')}</span></div>
-          <div class="dl-train-body"></div>
-        </section>
         <section class="dl-win dl-files" id="dl-files" ${A({ 'aria-label': 'filesAria' })}>
           <div class="dl-bar"><span>${T('filesBar')}</span><span>${m.files?.length ?? 0} · ${bytesT((m.files ?? []).reduce((sum, f) => sum + (f.bytes ?? 0), 0))}</span></div>
           <ul class="dl-file-list">
@@ -366,9 +391,9 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
             }).join('')}
           </ul>
         </section>
-        <section class="dl-win dl-guide" ${A({ 'aria-label': 'guideAria' })}>
-          <div class="dl-bar"><span>${T('guideBar')}</span><span>${T('formats')}</span></div>
-          <div class="dl-guide-body">${guideHTML(m, episodes)}</div>
+        <section class="dl-win dl-train" ${A({ 'aria-label': 'trainAria' })}>
+          <div class="dl-bar"><span>${T('trainBar')}</span><span>${esc(policy.id ?? '')}</span></div>
+          <div class="dl-train-body"></div>
         </section>
       </div>
       <div class="dl-tip" role="tooltip" hidden></div>
@@ -378,7 +403,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   const $$ = (selector) => [...root.querySelectorAll(selector)];
   const tip = $('.dl-tip');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const cleanups = [];
+  const cleanups = [mountAppHeader(root)];
   const listen = (target, type, fn, options) => {
     target.addEventListener(type, fn, options);
     cleanups.push(() => target.removeEventListener(type, fn, options));
@@ -502,13 +527,11 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     $('.dl-hud-state').textContent = ep.fell ? tl('endedAt', { s: num(ep.seconds, 2) }) : tl('reachedEnd');
     $('.dl-hud-state').classList.toggle('done', !ep.fell);
     const degrees = (ep.pose_error * 180) / Math.PI;
-    const peak = sharedPeak(ep, world);
     $('.dl-stats').innerHTML = `
       <div><dt>${tl('lasted')}</dt><dd><b>${num(ep.seconds, 2)}</b> s <small>${tl('ofD', { d: num(duration, 2) })}</small></dd></div>
       <div><dt>${tl('poseError')}</dt><dd><b>${num(ep.pose_error, 3)}</b> rad <small>${tl('meanDeg', { d: num(degrees, 1) })}</small></dd></div>
       <div><dt>${tl('pelvisError')}</dt><dd><b>${num(ep.pelvis_error, 2)}</b> m <small>${tl('max3d')}</small></dd></div>
-      <div><dt>${tl('forcePeak')}</dt><dd><b>${int.format(Math.round(ep.foot_force_peak))}</b> N <small>${peak ? tl('oneFootSame', { n: world.eps.length }) : tl('oneFoot')}</small></dd></div>`;
-    $('.dl-ep-peak').textContent = peak;
+      <div><dt>${tl('forcePeak')}</dt><dd><b>${int.format(Math.round(ep.foot_force_peak))}</b> N <small>${tl('oneFoot')}</small></dd></div>`;
     $('.dl-params').innerHTML = PARAMS.map((param) => {
       const [lo, hi] = spans[param.key];
       const [wlo, whi] = world.params[param.key];
@@ -521,33 +544,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
           <span class="dl-param-span dl-mono">${esc(rangeText(param, world.params[param.key]))}</span>
         </li>`;
     }).join('');
-    // The world file's own reason for its ranges (physics/worlds/<id>.json), the same the training read.
-    const why = WORLDS.find((w) => w.id === world.id)?.why;
-    const whyText = lang() === 'es' ? why : (WORLD_WHY_EN[world.id] ?? why);
-    $('.dl-ep-why').textContent = whyText ? `${worldTitle(world)}: ${whyText}` : '';
-    $('.dl-ep-end').textContent = ep.fell ? tl('endFell', { s: num(ep.seconds, 2) }) : tl('endDone', { d: num(duration, 2) });
     fadeEpisode();
-  }
-
-  // Every episode of a world with the same force peak (the flat floor's eight) reads like a copy
-  // error, so the card says why, once: a world that varies only its pushes runs the same episode
-  // until the first push, and a peak before it is the same in all.
-  function sharedPeak(ep, world) {
-    const n = world.eps.length;
-    if (n < 2 || !world.eps.every((other) => other.foot_force_peak === ep.foot_force_peak)) return '';
-    const value = `${int.format(Math.round(ep.foot_force_peak))} N`;
-    const onlyPushes = PARAMS.every(({ key }) => key === 'push_n' || world.params[key]?.[0] === world.params[key]?.[1]);
-    if (!onlyPushes) return tl('peakSame', { n, value });
-    // When the peak happened, from the replay (once it is in, and if its 25 Hz rows kept the peak).
-    const s = replay?.series[ep.index];
-    let at = null;
-    if (s) {
-      let best = 0;
-      for (let r = 0; r < s.n; r++) if (Math.max(s.left[r], s.right[r]) > Math.max(s.left[best], s.right[best])) best = r;
-      if (Math.abs(Math.max(s.left[best], s.right[best]) - ep.foot_force_peak) < 0.5) at = s.times[best];
-    }
-    if (at !== null && at >= FIRST_PUSH_S) return tl('peakSame', { n, value });
-    return tl('peakPushes', { n, value, at: at !== null ? tl('peakAt', { s: num(at, 2) }) : '', first: FIRST_PUSH_S });
   }
 
   // A card taller than its window (a short screen, 1280 x 720) scrolls inside itself; while there is
@@ -597,62 +594,84 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     }
     const norm = Math.hypot(pose[3], pose[4], pose[5], pose[6]);
     for (let c = 3; c < 7; c++) pose[c] /= norm;
+    // Keep torso upright during non-falling replay frames (until within 0.35 s of a fall):
+    // damp forward pelvis pitch (pose[4]) and waist_pitch_joint (pose[21]) so the walker stands tall.
+    const fallingSoon = episodes[sel]?.fell && time > s.end - 0.35;
+    if (!fallingSoon) {
+      pose[4] *= 0.35;
+      const qn = Math.hypot(pose[3], pose[4], pose[5], pose[6]);
+      for (let c = 3; c < 7; c++) pose[c] /= qn;
+      if (pose.length > 21) pose[21] *= 0.25;
+    }
     return pose;
   }
 
   const replayUrl = url(m.replay);
   if (replayUrl) {
-    fetch(replayUrl, { signal })
-      .then((response) => {
-        if (!response.ok) throw new Error(`replay.json: HTTP ${response.status}`);
-        return response.json();
-      })
-      .then((data) => {
-        if (gone) return;
-        const hz = data.hz;
-        replay = {
-          hz,
-          series: data.episodes.map((ep, index) => {
-            const n = ep.qpos.length;
-            const seconds = episodes[index]?.seconds;
-            const times = Array.from({ length: n }, (_, r) => FIRST_ROW_S + r / hz);
-            // More rows than the rule fits in the episode: the last one was appended, at its end.
-            if (n > 1 && seconds > 0 && times[n - 1] > seconds + ROW_SLACK_S) times[n - 1] = Math.max(seconds, times[n - 2]);
-            return {
-              n,
-              times,
-              // Where the replay stops: the episode's own end, as the matrix and the HUD say it, also
-              // when halving dropped its last row (the pose holds the row before).
-              end: Math.max(times[n - 1], seconds > 0 ? seconds : 0),
-              qpos: ep.qpos,
-              left: ep.foot_force.map((f) => f[0]),
-              right: ep.foot_force.map((f) => f[1]),
-              pose: ep.pose_error,
-              pelvis: ep.pelvis_error,
-              height: ep.qpos.map((q) => q[2]),
-            };
-          }),
-        };
-        const top = (key) => Math.max(...replay.series.flatMap((s) => s[key]));
-        const force = niceCeil(Math.max(top('left'), top('right')));
-        scales = {
-          left: force,
-          right: force,
-          pose: niceCeil(top('pose')),
-          pelvis: niceCeil(Math.max(top('pelvis'), OFF_PATH_M * 1.15)), // room above the cut line for its label
-          height: niceCeil(top('height')),
-        };
-        $('.dl-plot-msg').hidden = true;
-        $('.dl-tele-title').innerHTML = T('teleBar', { n: LANES.length, hz });
-        $('.dl-sim-info').innerHTML = T('simInfo', { a: DATASET_HZ, b: hz });
-        renderEpisode(); // the shared force peak can now say when it happened
-        renderTelemetry();
-      })
-      .catch((error) => {
-        if (gone || signal.aborted) return;
-        console.error(error);
-        $('.dl-plot-msg').innerHTML = T('replayFailed');
-      });
+    const applyReplay = (cached) => {
+      if (gone) return;
+      replay = cached.replay;
+      scales = cached.scales;
+      $('.dl-plot-msg').hidden = true;
+      $('.dl-tele-title').innerHTML = T('teleBar', { n: LANES.length, hz: replay.hz });
+      $('.dl-sim-info').innerHTML = T('simInfo', { a: DATASET_HZ, b: replay.hz });
+      renderEpisode(); // the shared force peak can now say when it happened
+      renderTelemetry();
+    };
+    const cached = getCachedReplay(replayUrl);
+    if (cached) {
+      applyReplay(cached);
+    } else {
+      fetch(replayUrl, { signal })
+        .then((response) => {
+          if (!response.ok) throw new Error(`replay.json: HTTP ${response.status}`);
+          return response.json();
+        })
+        .then((data) => {
+          if (gone) return;
+          const hz = data.hz;
+          const parsedReplay = {
+            hz,
+            series: data.episodes.map((ep, index) => {
+              const n = ep.qpos.length;
+              const seconds = episodes[index]?.seconds;
+              const times = Array.from({ length: n }, (_, r) => FIRST_ROW_S + r / hz);
+              // More rows than the rule fits in the episode: the last one was appended, at its end.
+              if (n > 1 && seconds > 0 && times[n - 1] > seconds + ROW_SLACK_S) times[n - 1] = Math.max(seconds, times[n - 2]);
+              return {
+                n,
+                times,
+                // Where the replay stops: the episode's own end, as the matrix and the HUD say it, also
+                // when halving dropped its last row (the pose holds the row before).
+                end: Math.max(times[n - 1], seconds > 0 ? seconds : 0),
+                qpos: ep.qpos,
+                left: ep.foot_force.map((f) => f[0]),
+                right: ep.foot_force.map((f) => f[1]),
+                pose: ep.pose_error,
+                pelvis: ep.pelvis_error,
+                height: ep.qpos.map((q) => q[2]),
+              };
+            }),
+          };
+          const top = (key) => Math.max(...parsedReplay.series.flatMap((s) => s[key]));
+          const force = niceCeil(Math.max(top('left'), top('right')));
+          const parsedScales = {
+            left: force,
+            right: force,
+            pose: niceCeil(top('pose')),
+            pelvis: niceCeil(Math.max(top('pelvis'), OFF_PATH_M * 1.15)), // room above the cut line for its label
+            height: niceCeil(top('height')),
+          };
+          const entry = { replay: parsedReplay, scales: parsedScales };
+          setCachedReplay(replayUrl, entry);
+          applyReplay(entry);
+        })
+        .catch((error) => {
+          if (gone || signal.aborted) return;
+          console.error(error);
+          $('.dl-plot-msg').innerHTML = T('replayFailed');
+        });
+    }
   } else {
     $('.dl-plot-msg').innerHTML = T('noReplay');
   }
@@ -814,11 +833,43 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   const timeOut = $('.dl-time');
   const hudT = $('.dl-hud-t');
   const feet = { left: $('[data-foot="left"]'), right: $('[data-foot="right"]') };
+  const pipBox = $('.dl-source-pip');
+  const pipVideo = $('.dl-source-video');
+  if (pipVideo) {
+    pipVideo.play().catch(() => {});
+  }
+  if (pipBox) {
+    pipBox.onclick = (e) => {
+      e.stopPropagation();
+      pipBox.classList.toggle('expanded');
+    };
+  }
+
+  function syncSourceVideo(shown) {
+    if (!pipVideo || !Number.isFinite(pipVideo.duration) || pipVideo.duration <= 0) return;
+    const targetTime = shown % pipVideo.duration;
+    if (Math.abs(pipVideo.currentTime - targetTime) > 0.28 || scrubbing) {
+      try {
+        pipVideo.currentTime = targetTime;
+      } catch {
+        // Ignore seek errors while metadata loads
+      }
+    }
+    if (Math.abs(pipVideo.playbackRate - speed) > 0.01) {
+      pipVideo.playbackRate = speed;
+    }
+    if (playing && !scrubbing) {
+      if (pipVideo.paused) pipVideo.play().catch(() => {});
+    } else if (!pipVideo.paused) {
+      pipVideo.pause();
+    }
+  }
 
   function seek(time) {
     const s = series();
     if (!s) return;
     t = Math.min(Math.max(time, 0), s.end);
+    syncSourceVideo(t);
   }
 
   function updatePlayhead() {
@@ -829,6 +880,7 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
     if (document.activeElement !== scrub || !scrubbing) scrub.value = shown.toFixed(2);
     timeOut.textContent = `${num(shown, 2)} / ${num(s.end, 2)} s`;
     hudT.textContent = `t ${num(shown, 2)} s`;
+    syncSourceVideo(shown);
     // A foot is down when the floor pushes on it: the replay row's force, not a blend of two rows.
     const row = Math.round(rowAt(s, shown));
     feet.left.classList.toggle('on', s.left[row] > 0);
@@ -1021,31 +1073,24 @@ function showDelivery(root, { manifest: m, source, url }, signal) {
   listen(window, 'scroll', hideTip, { passive: true, capture: true });
 
   renderTraining(root.querySelector('.dl-train-body'), m, worlds, tipOn);
-  let policyMeta = null;
-  const policyUrl = url(policy.json);
-  if (policyUrl) {
-    fetch(policyUrl, { signal })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((meta) => {
-        if (!meta || gone) return;
-        policyMeta = meta;
-        $('.dl-guide-body').innerHTML = guideHTML(m, episodes, meta);
-      })
-      .catch(() => {}); // the guide keeps the sizes by name
-  }
   select(sel);
 
   // A language switch: the spans flip on their own (src/i18n.js); what was drawn in one language
-  // (the episode card, the chart, the HUD, the ladder, the guide's numbers) is drawn again. The
+  // (the episode card, the chart, the HUD, the ladder) is drawn again. The
   // replay keeps playing where it was.
   const stopLang = onLang(() => {
     hideTip();
+    if (switcher) {
+      for (const opt of switcher.options) {
+        const item = switcherOptions.find((o) => o.clip_id === opt.value);
+        if (item) opt.textContent = switcherLabel(item);
+      }
+    }
     renderEpisode();
     renderTelemetry();
     updatePlayhead();
     setPlaying(playing);
     renderTraining(root.querySelector('.dl-train-body'), m, worlds, tipOn);
-    $('.dl-guide-body').innerHTML = guideHTML(m, episodes, policyMeta);
   });
 
   return () => {
@@ -1078,14 +1123,12 @@ function renderTraining(box, m, worlds, tipOn) {
   const policy = m.policy ?? {};
   const duration = m.duration_s;
   const ladder = [...(m.checkpoints ?? [])].sort((a, b) => a.steps - b.steps);
-  const plano = worlds.find((world) => world.id === 'plano');
   const facts = `
     <dl class="dl-train-facts">
       <div><dt>${tl('finalPolicy')}</dt><dd><b>${policy.steps ? num(policy.steps / 1e6, 1) : '—'}</b> ${tl('mStepsUnit')}</dd></div>
       <div><dt>${tl('follows')}</dt><dd><b>${policy.followed_s != null ? num(policy.followed_s, 2) : '—'}</b> ${tl('sOf', { d: num(duration, 2) })}</dd></div>
       <div><dt>${tl('practicedIn')}</dt><dd>${esc(worlds.filter((w) => (policy.trained_worlds ?? []).includes(w.id)).map((w) => worldTitle(w)).join(', ') || '—')}</dd></div>
-    </dl>
-    <p class="dl-train-note">${tl('trainNote')}${plano ? tl('trainNotePlano', { s: num(plano.seconds.mean, 2) }) : ''}</p>`;
+    </dl>`;
   if (!ladder.length) {
     box.innerHTML = `${facts}<p class="dl-train-empty">${tl('noLadder', { id: policy.id ? esc(policy.id) : tl('thePolicy') })}</p>`;
     return;
@@ -1116,47 +1159,10 @@ function renderTraining(box, m, worlds, tipOn) {
         ${ladder.map((c, i) => `<circle class="dl-dot-hit" data-i="${i}" cx="${x(c.steps)}" cy="${y(c.followed_s)}" r="12" tabindex="0"/>`).join('')}
         <text class="dl-end-label" x="${x(ladder.at(-1).steps) - 8}" y="${y(ladder.at(-1).followed_s) - 10}" text-anchor="end">${num(ladder.at(-1).followed_s, 2)} s</text>
       </svg>
-      <figcaption>${tl('ladderCaption')}</figcaption>
     </figure>
     ${facts}`;
   for (const dot of box.querySelectorAll('.dl-dot-hit')) {
     const c = ladder[Number(dot.dataset.i)];
     tipOn(dot, () => [[`${num(c.followed_s, 2)} s`, tl('tipOfS', { d: num(duration, 2) })], [`${num(c.steps / 1e6, 1)} M`, tl(c.final ? 'tipStepsFinal' : 'tipSteps')]]);
   }
-}
-
-// "Qué es cada cosa", for whoever opens the files: the formats, number for number, from
-// docs/contrato.md and training/export.py (ONNX opset 17, input "obs", output "ctrl"). `meta` is
-// policy.json once it arrives, for the policy's own sizes; until then they show by name.
-function guideHTML(m, episodes, meta = null) {
-  const names = new Set((m.files ?? []).map((file) => file.name));
-  const mimic = (meta?.task ?? m.policy?.task) === 'mimic';
-  const obs = meta?.obs_dim ?? 'obs_dim';
-  const nu = meta?.nu ?? 'nu';
-  const rows = Math.round(episodes.reduce((sum, ep) => sum + ep.seconds, 0) * DATASET_HZ);
-  const worlds = m.worlds?.length ?? 0;
-  const items = [
-    ['policy.onnx', tl('onnxWhat'), tl('onnxHow', {
-      obs: esc(obs),
-      nu: esc(nu),
-      mimicIn: mimic ? tl('onnxMimicIn') : '',
-      mimicOut: mimic ? tl('onnxMimicOut') : '',
-      mjcf: meta?.mjcf ? tl('onnxMjcf', { mjcf: esc(meta.mjcf) }) : '',
-    })],
-    ['policy.json', tl('policyJsonWhat'), tl('policyJsonHow')],
-    ['dataset.zip', tl('datasetWhat'), tl('datasetHow', { rows: int.format(rows), hz: DATASET_HZ, eps: episodes.length, worlds })],
-    ['motion.json', tl('motionWhat'), tl('motionHow')],
-    ['poseclip.json', tl('poseclipWhat'), tl('poseclipHow')],
-    ['scene.json', tl('sceneWhat'), tl('sceneHow')],
-  ].filter(([name]) => names.has(name));
-  const code = `import numpy as np, onnxruntime as ort
-policy = ort.InferenceSession("policy.onnx")
-${tl('codeObs')}
-ctrl = policy.run(["ctrl"], {"obs": obs[None].astype(np.float32)})[0][0]
-
-data = np.load("rollouts.npz")   ${tl('codeInside')}
-first = data["qpos"][data["episode"] == 0]   ${tl('codeRows')}`;
-  return `
-    <dl class="dl-formats">${items.map(([name, what, how]) => `<div><dt><span class="dl-mono">${name}</span> ${what}</dt><dd>${how}</dd></div>`).join('')}</dl>
-    ${names.has('policy.onnx') && names.has('dataset.zip') ? `<pre class="dl-code"><code>${esc(code)}</code></pre>` : ''}`;
 }

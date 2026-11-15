@@ -24,11 +24,11 @@ html.is-landing.lenis body {
   --fg-2: var(--ink-soft);
   --dim: var(--muted);
   --gutter: clamp(var(--s-4), 3.4vw, var(--s-7));
-  /* Where the film's frame starts: the top bar ends at 68 px, and 20 px of air keep the live tag
-     and the corners from reading as part of the bar (they touched it before). */
-  --hud-top: 84px;
-  /* Every chapter's card starts at the exact same vertical height as the Hero's live chip. */
-  --card-top: calc(var(--hud-top) + var(--s-3));
+  /* Where the film's frame starts: the top bar ends at ~70 px, and 34 px of air keep the viewfinder
+     corners and chapter cards well clear of the bar. */
+  --hud-top: 104px;
+  /* Every chapter's card starts at the exact same vertical height below the top corners. */
+  --card-top: calc(var(--hud-top) + var(--s-2));
   --card-width: min(36vw, 500px);
   position: relative;
   color: var(--fg);
@@ -176,21 +176,61 @@ html.is-landing.lenis body {
 .landing .sim-readout {
   position: absolute;
   right: var(--gutter);
-  bottom: 32px; /* the film's own numbers sit low, inside the bottom corner, away from the bar */
+  bottom: 32px; /* single unified readout chip in the bottom-right corner */
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 10px 14px;
   padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-2);
-  background: rgb(8 9 11 / 0.72);
-  backdrop-filter: blur(12px);
+  background: rgb(8 9 11 / 0.78);
+  backdrop-filter: blur(14px);
   font: 500 11px/1 var(--mono);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--fg-2);
   text-shadow: 0 1px 8px rgb(0 0 0 / 0.6);
   pointer-events: none;
+  transition: border-color 0.2s ease, opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.film-hud:not([data-shot='hero']) .sim-readout {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none !important;
+}
+
+.landing .sim-readout[data-state='push'] {
+  border-color: var(--signal);
+}
+
+.sim-live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 12px;
+  border-right: 1px solid var(--line);
+  color: var(--fg);
+  font-variant-numeric: tabular-nums;
+}
+
+.landing .sim-readout[data-state='push'] .sim-live-pill {
+  color: var(--signal);
+}
+
+.sim-state-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #6fcf8a;
+  flex: none;
+}
+
+.landing .sim-readout[data-state='push'] .sim-state-dot,
+.landing .sim-readout[data-state='fall'] .sim-state-dot {
+  background: var(--signal);
+  box-shadow: 0 0 10px var(--signal);
 }
 
 .film.ready ~ .film-hud:not(.is-closing) .sim-readout {
@@ -303,6 +343,7 @@ html.is-landing.lenis body {
 
 /* ---- Buttons ---- */
 
+.landing .btn,
 .btn {
   display: inline-flex;
   align-items: center;
@@ -320,29 +361,50 @@ html.is-landing.lenis body {
   text-transform: uppercase;
   text-decoration: none;
   cursor: pointer;
-  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.3s;
+  transform: none;
+  transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease, box-shadow 0.28s ease, transform 0.15s ease;
 }
 
+.landing .btn:hover:not(:disabled),
 .btn:hover:not(:disabled) {
   border-color: var(--fg);
+  background-color: rgb(241 243 238 / 0.08);
+  color: var(--fg);
   box-shadow: none;
+  transform: none;
 }
 
+.landing .btn:active:not(:disabled),
+.btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.landing .btn-small,
 .btn-small {
   min-height: 38px;
   padding: 0 var(--s-4);
   font-size: 12px;
 }
 
+.landing .btn-signal,
 .btn-signal {
   border-color: var(--signal);
   background: var(--signal);
   color: var(--on-signal);
 }
 
+.landing .btn-signal:hover:not(:disabled),
 .btn-signal:hover:not(:disabled) {
-  border-color: var(--signal);
-  box-shadow: 0 0 40px -6px var(--signal-glow);
+  border-color: #d4ff4d;
+  background-color: #d4ff4d;
+  color: var(--on-signal);
+  box-shadow: 0 0 32px -6px var(--signal-glow);
+  transform: none;
+}
+
+.landing .btn-signal:active:not(:disabled),
+.btn-signal:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .btn:disabled {
@@ -372,25 +434,34 @@ html.is-landing.lenis body {
   }
 }
 
-/* ---- Top bar ---- */
+/* ---- Top bar (matches .app-topbar geometry across Studio screens) ---- */
 
 .topbar {
   position: fixed;
-  inset: var(--s-3) var(--gutter) auto;
+  inset: 14px max(20px, calc((100vw - 1680px) / 2)) auto;
   z-index: 20;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px 18px;
+  padding: 10px 14px 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  background: rgb(12 14 18 / 0.78);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow:
+    inset 0 0.75px 0 rgb(255 255 255 / 0.14),
+    0 14px 32px -18px rgb(0 0 0 / 0.75);
+  transition: background-color 0.3s;
+}
+
+.topbar-right {
+  justify-self: end;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: var(--s-2) var(--s-2) var(--s-2) var(--s-3);
-  border: 1px solid var(--line);
-  border-radius: var(--r-2);
-  /* Detached from the edges and always on its own dark glass: over the hero the street behind it
-     is bright (shop windows, the sky), and the words and the button need the same ground there
-     as everywhere else. */
-  background: rgb(8 9 11 / 0.62);
-  backdrop-filter: blur(16px) saturate(1.2);
-  box-shadow: 0 16px 40px -20px rgb(0 0 0 / 0.8);
-  transition: background-color 0.3s;
+  margin-left: auto;
 }
 
 /* Past the hero the chapters' words scroll under the bar (home.js): a denser ground keeps the
@@ -401,10 +472,11 @@ html.is-landing.lenis body {
 
 /* Mark and word in em, so the footer's big wordmark is the header's exactly, only scaled. */
 .wordmark {
+  justify-self: start;
   display: inline-flex;
   align-items: center;
   gap: 0.33em;
-  margin-right: auto;
+  margin-right: 4px;
   font: 700 24px/1 var(--display);
   color: var(--fg);
   text-decoration: none;
@@ -426,50 +498,272 @@ html.is-landing.lenis body {
 }
 
 .topnav {
+  justify-self: center;
   display: flex;
   align-items: center;
-  gap: 18px;
-  margin-right: 4px;
-  padding-right: 14px;
-  border-right: 1px solid var(--line);
+  gap: 6px;
   font: 500 12px/1 var(--mono);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
-.topnav a {
-  position: relative;
-  padding: 6px 2px;
-  color: var(--fg-2);
-  text-decoration: none;
-  transition: color 0.2s;
+.topnav-sep {
+  display: inline-block;
+  width: 1px;
+  height: 14px;
+  margin: 0 4px;
+  background: var(--line);
+  flex: none;
 }
 
-.topnav a::after {
+.nav-drop {
+  position: relative;
+}
+
+.nav-drop-btn,
+.topnav > .nav-direct {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--fg-2);
+  font: 500 12px/1 var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s, background-color 0.2s, border-color 0.2s;
+}
+
+.landing .nav-drop-btn:hover:not(:disabled),
+.nav-drop-btn:hover,
+.nav-drop-btn:focus-visible,
+.nav-drop:hover .nav-drop-btn,
+.nav-drop.open .nav-drop-btn,
+.topnav > .nav-direct:hover,
+.topnav > .nav-direct:focus-visible {
+  color: var(--fg);
+  background: rgb(241 243 238 / 0.06);
+  box-shadow: none;
+  transform: none;
+}
+
+.nav-drop:hover:not(.dismissed) .nav-drop-btn,
+.nav-drop.open .nav-drop-btn {
+  border-color: var(--line);
+  color: var(--signal);
+}
+
+.nav-chev {
+  width: 11px;
+  height: 11px;
+  opacity: 0.7;
+  transition: transform 0.26s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+}
+
+.nav-drop:hover:not(.dismissed) .nav-chev,
+.nav-drop.open .nav-chev {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+
+.nav-drop-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  z-index: 40;
+  display: grid;
+  gap: 5px;
+  width: 348px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-2);
+  background: rgb(12 14 18 / 0.95);
+  backdrop-filter: blur(20px) saturate(1.6);
+  box-shadow:
+    inset 0 0.75px 0 rgb(255 255 255 / 0.16),
+    0 24px 48px -12px rgb(0 0 0 / 0.88);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(-8px) scale(0.975);
+  transform-origin: top center;
+  pointer-events: none;
+  transition:
+    opacity 0.24s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.26s cubic-bezier(0.16, 1, 0.3, 1),
+    visibility 0.24s;
+}
+
+.nav-drop-panel.nav-drop-studio {
+  width: 384px;
+}
+
+/* Invisible hover bridge across the 10px gap so moving the pointer from the button into the menu never drops :hover */
+.nav-drop-panel::before {
   content: '';
   position: absolute;
+  top: -14px;
   left: 0;
   right: 0;
-  bottom: -2px;
-  height: 2px;
-  border-radius: 2px;
+  height: 14px;
+}
+
+@media (min-width: 1001px) {
+  .nav-drop:hover:not(.dismissed) .nav-drop-panel,
+  .nav-drop:focus-within:not(.dismissed) .nav-drop-panel,
+  .nav-drop.open .nav-drop-panel {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0) scale(1);
+    pointer-events: auto;
+  }
+}
+
+.nav-drop-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 10px;
+  border: 1px solid rgb(241 243 238 / 0.06);
+  border-radius: var(--r-1);
+  background: rgb(241 243 238 / 0.025);
+  color: var(--fg);
+  text-decoration: none;
+  text-transform: none;
+  letter-spacing: 0;
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.15s ease;
+}
+
+.nav-drop-item:active {
+  transform: scale(0.985);
+}
+
+.nav-drop-item:hover,
+.nav-drop-item:focus-visible,
+.nav-drop-item.active {
+  border-color: rgb(200 255 46 / 0.38);
+  background: rgb(200 255 46 / 0.08);
+}
+
+.nav-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid rgb(200 255 46 / 0.28);
+  border-radius: 8px;
+  background: rgb(200 255 46 / 0.08);
+  color: var(--signal);
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.nav-chip.nav-chip-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: none;
+}
+
+.nav-drop-item:hover .nav-chip,
+.nav-drop-item.active .nav-chip {
+  border-color: var(--signal);
   background: var(--signal);
-  box-shadow: 0 0 8px var(--signal-glow);
-  transform: scaleX(0);
-  transform-origin: center;
-  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+  color: var(--on-signal);
 }
 
-.topnav a:hover {
+.nav-item-body {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nav-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nav-drop-item b {
+  font: 600 13.5px/1.2 var(--display);
+  letter-spacing: -0.015em;
   color: var(--fg);
 }
 
-.topnav a.active {
-  color: var(--fg);
+.nav-drop-item:hover b,
+.nav-drop-item.active b {
+  color: var(--signal);
 }
 
-.topnav a.active::after {
-  transform: scaleX(1);
+.nav-item-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6.5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgb(8 9 11 / 0.6);
+  font: 600 7.5px/1 var(--mono);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--fg-2);
+}
+
+.nav-drop-item:hover .nav-item-badge,
+.nav-drop-item.active .nav-item-badge {
+  border-color: rgb(200 255 46 / 0.35);
+  color: var(--signal);
+}
+
+.nav-item-body > span {
+  font: 400 11.5px/1.35 var(--display);
+  color: var(--fg-2);
+}
+
+.nav-mobile-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(241 243 238 / 0.06);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.nav-mobile-btn svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  fill: none;
+}
+
+.nav-mobile-btn .i-close {
+  display: none;
+}
+
+.topbar.menu-open .nav-mobile-btn .i-bars {
+  display: none;
+}
+
+.topbar.menu-open .nav-mobile-btn .i-close {
+  display: block;
 }
 
 .live-dot {
@@ -739,14 +1033,14 @@ html.is-landing.lenis body {
   width: min(40vw, 640px);
 }
 
-.frame {
+.landing .frame {
   position: relative;
   overflow: hidden;
   border-radius: var(--r-2);
   background: #000;
 }
 
-.frame figcaption {
+.landing .frame figcaption {
   position: absolute;
   left: 10px;
   bottom: 8px;
@@ -778,7 +1072,9 @@ html.is-landing.lenis body {
   pointer-events: none;
 }
 
-/* The skeleton sits over the video's corner, picture in picture. */
+/* The skeleton sits over the video's corner, picture in picture.
+   Scoped to .landing .frame.frame-skeleton so .landing .frame (position: relative) never overrides it. */
+.landing .frame.frame-skeleton,
 .frame-skeleton {
   position: absolute;
   right: -18%;
@@ -807,7 +1103,7 @@ html.is-landing.lenis body {
 /* Gym: three stops of the training, one screen of scroll each */
 
 .gym {
-  height: 500svh; /* the panel sticks for four screens, one per stage (home.js gymStage, gymGate) */
+  height: 400svh; /* the panel sticks for three full screens, one per stage (home.js gymStage) */
 }
 
 /* Gym and Policy: their words sit on a dark card, since the street behind them is busy. No
@@ -952,6 +1248,8 @@ html.is-landing.lenis body {
 }
 
 .steps-now b {
+  min-width: 3.6ch;
+  white-space: nowrap;
   font: 500 clamp(38px, 3.8vw, 56px)/0.9 var(--display);
   letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
@@ -1020,10 +1318,11 @@ html.is-landing.lenis body {
 /* The three checkpoints as a segmented control. */
 .axis-stops {
   display: grid;
-  grid-template-columns: repeat(4, 1fr); /* one per GYM_STAGES entry (home.js) */
+  grid-template-columns: repeat(3, 1fr); /* one per GYM_STAGES entry (home.js) */
   gap: 4px; /* no box around the stops: the card is the only box (one card, not one inside another) */
 }
 
+.landing .axis-stop,
 .axis-stop {
   display: grid;
   justify-items: start;
@@ -1031,23 +1330,40 @@ html.is-landing.lenis body {
   min-width: 0;
   min-height: 0;
   padding: 10px 8px;
-  border: 0;
+  border: 1px solid transparent;
   border-radius: var(--r-2);
   background: none;
   color: var(--fg-2);
   text-align: left;
   cursor: pointer;
-  transition: background 0.25s, color 0.25s;
+  transform: none;
+  box-shadow: none;
+  transition: background-color 0.22s ease, color 0.22s ease, border-color 0.22s ease, transform 0.15s ease;
 }
 
+.landing .axis-stop:hover:not(:disabled),
 .axis-stop:hover {
-  background: rgb(241 243 238 / 0.07);
+  border-color: var(--line);
+  background-color: rgb(241 243 238 / 0.07);
   color: var(--fg);
+  box-shadow: none;
+  transform: none;
 }
 
-.axis-stop.on {
-  background: var(--signal);
+.landing .axis-stop:active:not(:disabled),
+.axis-stop:active {
+  transform: scale(0.98);
+}
+
+.landing .axis-stop.on,
+.landing .axis-stop.on:hover:not(:disabled),
+.axis-stop.on,
+.axis-stop.on:hover {
+  border-color: var(--signal);
+  background-color: var(--signal);
   color: var(--bg);
+  box-shadow: none;
+  transform: none;
 }
 
 .axis-label {
@@ -1069,8 +1385,9 @@ html.is-landing.lenis body {
   gap: 6px;
 }
 
-
 .stage-text {
+  display: block;
+  min-height: 2.8em;
   font-size: 15px;
   line-height: 1.4;
 }
@@ -1078,6 +1395,8 @@ html.is-landing.lenis body {
 .stage-numbers {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
+  min-height: 1.4em;
   gap: 4px 6px;
 }
 
@@ -1103,78 +1422,82 @@ html.is-landing.lenis body {
   align-items: center;
   margin-top: 16px !important;
   font: 500 11px/1.5 var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   text-transform: uppercase;
   color: var(--signal) !important;
 }
 
-
-
-
-
-
-
 /* Policy: the whole robot the network moves, the numbers beside it */
 
 .policy {
-  height: 260svh;
+  height: 220svh;
 }
 
 .policy-caption {
   right: var(--gutter);
   top: var(--card-top); /* as every chapter's card */
   width: var(--card-width);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  box-sizing: border-box;
+  padding: 20px 22px 22px;
 }
-
-
 
 .specs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px !important;
+  width: 100%;
+  gap: 8px;
+  margin-top: 12px !important;
 }
 
 .specs li {
   display: grid;
-  gap: 4px;
-  padding: 12px 14px;
+  gap: 3px;
+  padding: 10px 12px;
   border: 1px solid var(--line);
   border-radius: var(--r-1);
   background: rgb(241 243 238 / 0.03);
 }
 
 .specs b {
-  font: 500 clamp(22px, 2.2vw, 30px)/1 var(--display);
+  font: 500 clamp(20px, 2vw, 27px)/1 var(--display);
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
   color: var(--signal);
 }
 
 .specs span {
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.3;
   color: var(--fg-2);
 }
 
 .policy-note {
+  width: 100%;
   margin-top: 12px !important;
-  padding-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--line);
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.4;
 }
 
 /* The way into what the policy delivers (#/delivery): stays on phones, where the note above hides. */
 .policy-data {
-  min-width: 224px;
+  align-self: flex-start;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 210px;
   margin-top: 12px;
 }
 
-/* Closing: the manifesto and action cards lock on screen while the footer scrolls into view */
+/* Closing: the manifesto and action cards lock on screen while the footer scrolls into view as a parallax curtain. */
 
 .closing {
   position: relative;
-  min-height: 192svh;
+  min-height: 148svh;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -1189,14 +1512,16 @@ html.is-landing.lenis body {
 }
 
 .closing-inner {
-  max-width: 1200px;
+  width: 100%;
+  max-width: 1240px;
   margin: 0 auto;
 }
 
 /* Two lines, one sentence each (strings.js): sized so the longer one fits the 1200 px column. */
 .manifesto {
-  font-size: clamp(28px, 4.2vw, 56px) !important;
-  line-height: 1.02 !important;
+  font-size: clamp(34px, 4.9vw, 68px) !important;
+  line-height: 1.0 !important;
+  letter-spacing: -0.035em;
   white-space: nowrap;
 }
 
@@ -1212,9 +1537,159 @@ html.is-landing.lenis body {
 
 .closing-text {
   max-width: 48em;
-  margin-top: 24px !important;
-  font-size: clamp(17px, 1.4vw, 21px);
-  color: var(--fg-2);
+  margin-top: 18px !important;
+  font-size: clamp(19px, 1.65vw, 24px);
+  line-height: 1.45;
+  color: var(--fg) !important;
+}
+
+/* ---- 3 Verticals Section (One Physics Engine, Every Physical Machine) ---- */
+
+.verticals-block {
+  display: grid;
+  gap: 24px;
+  margin-top: clamp(44px, 6vh, 64px);
+  padding-top: clamp(32px, 4vh, 44px);
+  border-top: 1px solid var(--line-dark);
+}
+
+.verticals-head {
+  display: grid;
+  gap: 10px;
+  max-width: 56em;
+}
+
+.verticals-kicker {
+  margin: 0 !important;
+  font: 600 11px/1.2 var(--mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--signal) !important;
+}
+
+.verticals-title {
+  margin: 0;
+  font: 600 clamp(24px, 2.6vw, 36px)/1.05 var(--display);
+  letter-spacing: -0.03em;
+  color: var(--fg);
+}
+
+.verticals-lede {
+  margin: 0 !important;
+  max-width: 64ch;
+  font: 400 15.5px/1.55 var(--display);
+  color: var(--fg-2) !important;
+}
+
+.verticals-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+
+@media (max-width: 1040px) {
+  .verticals-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vertical-card {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid var(--line-dark);
+  border-radius: var(--r-2);
+  background: rgb(18 20 23 / 0.72);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 0.75px 0 rgb(255 255 255 / 0.12);
+  transition: border-color 0.22s ease, background-color 0.22s ease;
+}
+
+.vertical-card:hover {
+  border-color: rgb(200 255 46 / 0.45);
+  background: rgb(22 25 29 / 0.85);
+}
+
+.vertical-badge {
+  justify-self: start;
+  padding: 4px 9px;
+  border: 1px solid rgb(200 255 46 / 0.35);
+  border-radius: 999px;
+  background: rgb(200 255 46 / 0.08);
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--signal);
+}
+
+.vertical-card h4 {
+  margin: 2px 0 0;
+  font: 600 clamp(19px, 1.5vw, 22px)/1.15 var(--display);
+  letter-spacing: -0.025em;
+  color: var(--fg);
+}
+
+.vertical-io {
+  margin: 0 !important;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: rgb(8 9 11 / 0.65);
+  font: 500 11px/1.35 var(--mono);
+  color: var(--fg);
+}
+
+.vertical-body {
+  margin: 0 !important;
+  font: 400 14px/1.55 var(--display);
+  color: var(--fg-2) !important;
+}
+
+.vertical-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.vertical-cta {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: rgb(241 243 238 / 0.04);
+  color: var(--fg);
+  font: 500 12px/1 var(--display);
+  white-space: nowrap;
+  text-decoration: none;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s, transform 0.15s;
+}
+
+.vertical-cta:active {
+  transform: scale(0.97);
+}
+
+.vertical-cta.primary {
+  border-color: var(--signal);
+  color: var(--signal);
+}
+
+.vertical-cta.primary:hover,
+.vertical-cta.primary:focus-visible {
+  background: var(--signal);
+  color: var(--on-signal);
+}
+
+.vertical-cta:not(.primary):hover,
+.vertical-cta:not(.primary):focus-visible {
+  border-color: var(--fg);
+  background: rgb(241 243 238 / 0.1);
 }
 
 /* Where we are: three static status cards (Today, Training, What's next). */
@@ -1302,33 +1777,39 @@ html.is-landing.lenis body {
 
 .tries {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-  margin-top: 12px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 14px;
+  margin-top: 28px;
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 1160px) {
   .tries {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-/* The ways to try it (and see what it delivers): real cards, each with its own icon, a short detail and a button, so
-   they read as different and clickable. */
+/* The 5 Studio tools: each card has an icon + domain badge, large screen name, short 1-line sub, and CTA pill. */
 .try {
-  display: grid;
-  grid-template-rows: auto 1fr auto;
-  gap: var(--s-4);
-  min-height: 200px;
-  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 11px;
+  min-height: 214px;
+  padding: 22px;
   border: 1px solid var(--line-dark);
   border-radius: var(--r-2);
-  background: rgb(241 243 238 / 0.04);
+  background: rgb(18 20 23 / 0.78);
+  backdrop-filter: blur(14px);
   color: var(--fg);
   text-decoration: none;
   transform: translateZ(0);
   backface-visibility: hidden;
-  transition: border-color 0.16s ease, background-color 0.16s ease;
+  transition: border-color 0.22s ease, background-color 0.22s ease, transform 0.15s ease;
+}
+
+.try:active {
+  transform: scale(0.98);
 }
 
 .try:hover,
@@ -1337,33 +1818,58 @@ html.is-landing.lenis body {
   background-color: rgb(200 255 46 / 0.08);
 }
 
+.try-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .try-icon {
-  width: 44px;
-  height: 44px;
-  margin-bottom: 6px;
-  fill: none;
+  width: 30px;
+  height: 30px;
   stroke: var(--signal);
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linecap: round;
   stroke-linejoin: round;
+  fill: none;
+  flex: none;
 }
 
+.try-tag {
+  padding: 4px 8px;
+  border: 1px solid rgb(200 255 46 / 0.28);
+  border-radius: 999px;
+  background: rgb(200 255 46 / 0.07);
+  font: 600 9.5px/1 var(--mono);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--signal);
+}
 
 .try b {
-  font: 500 clamp(20px, 1.8vw, 26px)/1.1 var(--display);
-  letter-spacing: -0.02em;
+  margin-top: 2px;
+  font: 600 clamp(21px, 1.75vw, 25px)/1.12 var(--display);
+  letter-spacing: -0.025em;
+  color: var(--fg);
 }
 
+.try-sub {
+  font: 400 14px/1.45 var(--display);
+  color: var(--fg-2);
+}
 
 .try-go {
-  justify-self: start;
-  margin-top: 6px;
-  padding: 10px 16px;
+  align-self: flex-start;
+  margin-top: auto;
+  padding: 8px 15px;
   border: 1px solid var(--signal);
-  border-radius: var(--r-1);
-  font: 500 14px/1 var(--display);
+  border-radius: 999px;
+  font: 500 13px/1 var(--display);
+  white-space: nowrap;
   color: var(--signal);
-  transition: background 0.25s, color 0.25s;
+  transition: background 0.22s ease, color 0.22s ease;
 }
 
 .try:hover .try-go,
@@ -1391,67 +1897,165 @@ html.is-landing.lenis body {
 .footer {
   position: relative;
   z-index: 2;
-  display: grid;
-  gap: 24px;
   width: 100%;
-  max-width: 1200px;
-  margin: clamp(180px, 24vh, 280px) auto 0;
-  padding: 22px 28px 26px;
+  max-width: 1240px;
+  margin: clamp(56px, 9vh, 96px) auto 0;
+  padding: 24px 36px 26px;
   border-top: 1px solid var(--line-dark);
   border-radius: 0;
-  background: linear-gradient(180deg, rgb(8 9 11 / 0.94), rgb(8 9 11 / 0.99));
+  background: linear-gradient(180deg, rgb(8 9 11 / 0.96), rgb(8 9 11 / 1));
 }
 
-.footer > p {
-  max-width: 44em;
-  font-size: 15px;
-  color: var(--fg-2);
-}
-
-.foot-row {
+.foot-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 24px;
-  padding-top: 0;
-  border-top: 0;
+  gap: 24px 48px;
 }
 
-.wordmark.big {
-  font-size: clamp(56px, 8.5vw, 112px);
-  line-height: 0.95;
-}
-
-.foot-specs {
+.foot-brand-col {
   display: grid;
-  gap: 10px;
-  margin: 0;
-  font: 500 11px/1.4 var(--mono);
+  align-content: end;
+  gap: 8px;
+}
+
+.footer .wordmark {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.33em;
+  margin-right: 0;
+  font: 700 clamp(26px, 2.4vw, 32px) / 1 var(--display);
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.footer .wordmark.big {
+  font-size: clamp(44px, 5.8vw, 72px);
+  line-height: 0.92;
+}
+
+.foot-rights {
+  margin: 0 !important;
+  font: 500 12px/1.4 var(--mono);
+  color: var(--dim) !important;
+}
+
+.foot-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 28px 48px;
+}
+
+.foot-col {
+  display: grid;
+  align-content: start;
+  gap: 9px;
+}
+
+.foot-col h4 {
+  margin: 0 0 4px;
+  font: 600 10.5px/1.2 var(--mono);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-}
-
-.foot-specs dt {
-  color: var(--dim);
-}
-
-.foot-specs dd {
-  margin: 0;
-}
-
-.foot-specs a {
   color: var(--signal);
 }
 
-/* ---- Small tablets: no room for the nav ---- */
+.foot-col a {
+  color: var(--fg-2);
+  font: 400 13.5px/1.35 var(--display);
+  text-decoration: none;
+  transition: color 0.16s ease;
+}
+
+.foot-col a:hover,
+.foot-col a:focus-visible {
+  color: var(--fg);
+}
+
+@media (max-width: 960px) {
+  .foot-bar {
+    grid-template-columns: 1fr;
+  }
+  .foot-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---- Small tablets & phones: mobile accordion drawer ---- */
 
 @media (max-width: 1000px) {
-  .topnav {
-    display: none;
+  .topbar {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .topbar .lang-switch {
     margin-left: auto;
+  }
+
+  .nav-mobile-btn {
+    display: inline-flex;
+  }
+
+  .topnav {
+    display: none;
+    order: 10;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    width: 100%;
+    max-height: calc(100svh - 88px);
+    overflow-y: auto;
+    margin: 8px 0 0;
+    padding: 12px 4px 6px;
+    border-right: 0;
+    border-top: 1px solid var(--line);
+  }
+
+  .topbar.menu-open .topnav {
+    display: flex;
+  }
+
+  .topnav-sep {
+    display: none;
+  }
+
+  .nav-drop-btn,
+  .topnav > .nav-direct {
+    justify-content: space-between;
+    width: 100%;
+    min-height: 40px;
+    padding: 0 12px;
+    background: rgb(241 243 238 / 0.04);
+  }
+
+  .nav-drop-panel,
+  .nav-drop-panel.nav-drop-wide {
+    position: static;
+    display: none;
+    grid-template-columns: 1fr;
+    width: 100%;
+    margin-top: 6px;
+    padding: 10px;
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+    box-shadow: none;
+  }
+
+  .nav-drop.open .nav-drop-panel {
+    display: grid;
+  }
+
+  .nav-drop-col + .nav-drop-col {
+    margin-top: 8px;
+    padding-top: 10px;
+    padding-left: 0;
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 }
 
@@ -1578,10 +2182,11 @@ html.is-landing.lenis body {
     width: auto;
   }
 
-  .frame {
+  .landing .frame {
     border-radius: var(--r-1);
   }
 
+  .landing .frame.frame-skeleton,
   .frame-skeleton {
     position: static;
     width: auto;
@@ -1589,7 +2194,7 @@ html.is-landing.lenis body {
     box-shadow: none;
   }
 
-  .frame figcaption {
+  .landing .frame figcaption {
     left: 6px;
     bottom: 5px;
     font-size: 9px;
@@ -1737,16 +2342,18 @@ html.is-landing.lenis body {
   }
 
   .try {
-    grid-template-columns: 28px 1fr auto;
-    grid-template-rows: auto auto;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto auto;
     align-items: center;
-    gap: 2px var(--s-3);
+    gap: 4px var(--s-3);
     min-height: 60px;
     padding: var(--s-3) 0;
     border: 0;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
     background: none;
+    backdrop-filter: none;
   }
 
   .try:hover,
@@ -1755,30 +2362,40 @@ html.is-landing.lenis body {
     background: none;
   }
 
+  .try-head {
+    grid-column: 1;
+    justify-content: flex-start;
+  }
+
   .try-icon {
-    grid-row: span 2;
-    width: 28px;
-    height: 28px;
-    margin: 0;
+    width: 18px;
+    height: 18px;
+  }
+
+  .try-tag {
+    grid-column: 1;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-size: 9.5px;
+  }
+
+  .try b {
+    grid-column: 1;
+    font-size: 17px;
   }
 
   .try .try-sub {
     display: block;
-    grid-column: 2;
+    grid-column: 1;
     font-size: 13px;
     color: var(--fg-2);
   }
 
   .try-go {
-    grid-column: 3;
-    grid-row: 1 / span 2;
-  }
-
-  .try b {
-    font-size: 17px;
-  }
-
-  .try-go {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    align-self: center;
     margin: 0;
     padding: 0;
     border: 0;
@@ -1813,8 +2430,9 @@ html.is-landing.lenis body {
   }
 
   .footer {
-    gap: var(--s-5);
-    margin-top: var(--s-8);
+    gap: var(--s-4);
+    margin-top: var(--s-5);
+    padding: 18px 20px 24px;
   }
 
   .footer > p {

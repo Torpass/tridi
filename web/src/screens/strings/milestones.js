@@ -2,14 +2,14 @@
 // and the Platanus Hack 26 Caracas origin story + live pitch video.
 import { dict } from '../../i18n.js';
 
-export const title = { es: 'Avances y casos reales', en: 'Milestones & Field Notes' };
+export const title = { es: 'Avances', en: 'Milestones' };
 
 export const { T, t, A } = dict({
   back: { es: 'Volver al inicio', en: 'Back to home' },
-  head: { es: 'Avances y casos reales', en: 'Milestones & Field Notes' },
+  head: { es: 'Avances y casos reales', en: 'Milestones & Case Studies' },
   lede: {
-    es: 'De las 48 horas en Platanus Hack 26 Caracas al primer robot físico controlado en el suelo por una política entrenada en Tridi.',
-    en: 'From 48 hours at Platanus Hack 26 Caracas to the first physical robot driven on the floor by a policy trained in Tridi.',
+    es: 'De 36 horas en Platanus Hack 26 Caracas al primer robot físico guiado en el suelo por una política de Tridi.',
+    en: 'From 36 hours at Platanus Hack 26 Caracas to the first physical robot driven on the floor by a Tridi policy.',
   },
   tabSim2Real: {
     es: '02 · Caso Real Sim-to-Real (Nov 2026)',
@@ -46,7 +46,12 @@ export const { T, t, A } = dict({
     es: 'Dos motores TT con reductora (200 RPM, llantas de TPU), batería 2S 18650 (7,4 V), puente H L298N, ultrasónico HC-SR04 y sensor óptico I2C APDS-9960.',
     en: 'Dual TT gearmotors (200 RPM, TPU tires), 2S 18650 battery pack (7.4 V), L298N H-bridge, HC-SR04 ultrasonic sensor and APDS-9960 I2C optical sensor.',
   },
-  'm2.ctaSim': { es: 'Abrir el robot de Luigi en Simulaciones →', en: 'Open Luigi’s robot in Simulations →' },
+  'm2.ctaSim': { es: 'Simular Robot de Luigi (Lab 3) →', en: 'Simulate Luigi’s Robot (Lab 3) →' },
+  'm2.ctaLab4': { es: 'Probar Lab 4 (Radar SG90) →', en: 'Try Lab 4 (SG90 Radar) →' },
+  'm2.zoomHint': { es: 'Clic para ampliar', en: 'Click to enlarge' },
+  'm2.closeModal': { es: 'Cerrar vista ampliada', en: 'Close enlarged view' },
+  'm2.prevPhoto': { es: 'Imagen anterior', en: 'Previous image' },
+  'm2.nextPhoto': { es: 'Siguiente imagen', en: 'Next image' },
 
   'm2.galleryTitle': {
     es: 'Arquitectura física: del diseño paramétrico al montaje real',
@@ -110,13 +115,15 @@ export const { T, t, A } = dict({
 
   // Milestone 01 — Platanus Hack 26 Caracas
   'm1.badge': { es: 'Hito 01 · Octubre 2026 · Platanus Hack 26 Caracas', en: 'Milestone 01 · October 2026 · Platanus Hack 26 Caracas' },
+  'm1.ctaSims': { es: 'Abrir Simulaciones →', en: 'Open Simulations →' },
+  'm1.ctaDelivery': { es: 'Ver Telemetría (#/delivery) →', en: 'View Telemetry (#/delivery) →' },
   'm1.title': {
     es: 'Dónde nació Tridi: demo y presentación en vivo en Platanus Hack 26 Caracas',
     en: 'Where Tridi was born: live demo & pitch at Platanus Hack 26 Caracas',
   },
   'm1.intro': {
-    es: 'Del 23 al 25 de octubre de 2026, justo saliendo del Startup Venezuela Summit, nos encerramos 48 horas en las oficinas de Yummy en Caracas para la edición venezolana de Platanus Hack 26. Ahí construimos la primera versión de Tridi (Juan Villa, Pastor Jiménez, César Martínez y Alejandro Hernández, con la mentoría de Sebastián Alcalá) bajo una premisa clara: ChatGPT tuvo todo internet para entrenarse, pero los robots no tienen datos de movimiento físico.',
-    en: 'From October 23 to 25, 2026, straight out of the Startup Venezuela Summit, we locked in for 48 hours at Yummy’s offices in Caracas for Platanus Hack 26. There we built the first version of Tridi (Juan Villa, Pastor Jiménez, César Martínez and Alejandro Hernández, mentored by Sebastián Alcalá) on a simple premise: ChatGPT had the whole internet to train on, but robots have no physical motion data.',
+    es: 'Del 23 al 25 de octubre de 2026, justo saliendo del Startup Venezuela Summit, nos encerramos 36 horas en las oficinas de Yummy en Caracas para la edición venezolana de Platanus Hack 26. Ahí construimos la primera versión de Tridi (Juan Villa, Pastor Jiménez, César Martínez y Alejandro Hernández, con la mentoría de Sebastián Alcalá) bajo una premisa clara: ChatGPT tuvo todo internet para entrenarse, pero los robots no tienen datos de movimiento físico.',
+    en: 'From October 23 to 25, 2026, straight out of the Startup Venezuela Summit, we locked in for 36 hours at Yummy’s offices in Caracas for Platanus Hack 26. There we built the first version of Tridi (Juan Villa, Pastor Jiménez, César Martínez and Alejandro Hernández, mentored by Sebastián Alcalá) on a simple premise: ChatGPT had the whole internet to train on, but robots have no physical motion data.',
   },
   'm1.vidLabel': {
     es: 'Pitch y demo en vivo en Platanus Hack 26 Caracas (2:53 · sin ronda de preguntas)',

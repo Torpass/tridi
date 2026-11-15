@@ -1066,6 +1066,69 @@ def get_delivery_file(clip_id: str, name: str) -> FileResponse:
     return FileResponse(path, media_type=DELIVERY_FILES[name], filename=download)
 
 
+# --- Hardware Component Catalog & Custom Registry (Tasks P-1 & P-3) -----------------------------
+
+CATALOG_PATH = ROOT / "physics" / "components" / "catalog.json"
+CUSTOM_COMPONENTS_PATH = DATA_DIR / "components" / "custom.json"
+COMPONENT_BUCKETS = ("mcus", "drivers", "actuators", "sensors", "structures")
+
+
+def _load_hardware_catalog() -> dict:
+    base = json.loads(CATALOG_PATH.read_text()) if CATALOG_PATH.exists() else {}
+    if CUSTOM_COMPONENTS_PATH.exists():
+        try:
+            custom = json.loads(CUSTOM_COMPONENTS_PATH.read_text())
+            for bucket in COMPONENT_BUCKETS:
+                if isinstance(custom.get(bucket), dict):
+                    base.setdefault(bucket, {}).update(custom[bucket])
+        except Exception:
+            pass
+    return base
+
+
+@app.get("/components")
+def get_components() -> dict:
+    """Returns the full Tridi Hardware Component Catalog (base + custom registered components)."""
+    return _load_hardware_catalog()
+
+
+@app.post("/components", status_code=201)
+async def register_custom_component(request: Request) -> dict:
+    """Registers a custom hardware component (motor, servo, sensor, driver, or MCU) into the catalog."""
+    _check_write_rate(request)
+    body = await request.json()
+    if not isinstance(body, dict):
+        raise HTTPException(400, "el componente debe ser un objeto JSON")
+    comp_id = str(body.get("id", "")).strip()
+    name = str(body.get("name", "")).strip()
+    category = str(body.get("category", "")).strip()
+    mujoco_spec = body.get("mujoco")
+    if not comp_id or not re.match(r"^[a-z0-9_]{2,64}$", comp_id):
+        raise HTTPException(422, "el id del componente debe usar snake_case alfanumérico")
+    if not name or not category or not isinstance(mujoco_spec, dict):
+        raise HTTPException(422, "el componente requiere name, category y bloque mujoco")
+    bucket = body.get("bucket")
+    if bucket not in COMPONENT_BUCKETS:
+        if category == "mcu":
+            bucket = "mcus"
+        elif category == "driver":
+            bucket = "drivers"
+        elif category in ("dc_motor", "servo", "stepper", "linear_actuator", "actuator"):
+            bucket = "actuators"
+        elif category in ("distance_sensor", "optical_sensor", "sensor"):
+            bucket = "sensors"
+        else:
+            bucket = "structures"
+    entry = {k: v for k, v in body.items() if k != "bucket"}
+    entry.update({"id": comp_id, "name": name, "category": category})
+    with lock:
+        CUSTOM_COMPONENTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+        custom = json.loads(CUSTOM_COMPONENTS_PATH.read_text()) if CUSTOM_COMPONENTS_PATH.exists() else {}
+        custom.setdefault(bucket, {})[comp_id] = entry
+        CUSTOM_COMPONENTS_PATH.write_text(json.dumps(custom, indent=2, ensure_ascii=False))
+    return {"bucket": bucket, "component": entry}
+
+
 threading.Thread(target=_worker, daemon=True, name="tridi-worker").start()
 threading.Thread(target=_train_worker, daemon=True, name="tridi-train-worker").start()
 threading.Thread(target=_janitor, daemon=True, name="tridi-janitor").start()

@@ -20,8 +20,10 @@ export const LEVELS = [
 export const FINAL_LEVEL = 'g1-stand';
 
 export const ROBOT_MODELS = [
-  { id: 'unitree_g1', label: 'Unitree G1 (29 motores + manos 5 dedos)' },
-  { id: 'luigi_lab3', label: 'Robot Explorador Lab III — Luigi (Arduino UNO + HC-SR04 + APDS-9960)' },
+  { id: 'unitree_g1', vertical: 'humanoids', label: 'Humanoide Unitree G1 (29 motores + manos 5 dedos)' },
+  { id: 'luigi_lab3', vertical: 'rovers', label: 'Rover Luigi v1 — Sensores Fijos (Arduino UNO + HC-SR04 + APDS-9960)' },
+  { id: 'luigi_lab4', vertical: 'rovers', label: 'Rover Luigi v2 — Radar Servo Móvil (Arduino UNO + SG90 + HC-SR04)' },
+  { id: 'factory_cell', vertical: 'industrial', label: 'Celda Industrial — Empaquetadora Cronometrada (PLC S7-1200 / PackML)' },
 ];
 
 // Imitation policies (training/imitate.py): each learned one clip, and does it with physics instead
@@ -87,6 +89,18 @@ export const IMITATIONS = [
     robot: 'luigi_lab3',
     clip: '__luigi__',
     label: 'Robot Lab III (Luigi) · Exploración y evasión con física (5 M pasos, 200 RPM)',
+  },
+  {
+    id: 'luigi-lab4',
+    robot: 'luigi_lab4',
+    clip: '__luigi_lab4__',
+    label: 'Robot Lab IV (Luigi) · Escaneo activo SG90 + evasión continua 50 Hz (10 M pasos)',
+  },
+  {
+    id: 'factory-cell',
+    robot: 'factory_cell',
+    clip: '__factory_cell__',
+    label: 'Celda Industrial · Sincronización por sensores ópticos (0 % merma frente a falla de cinta)',
   },
 ].filter(({ id }) => URLS[`../../training/policies/${id}.onnx`]);
 

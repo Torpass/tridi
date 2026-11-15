@@ -62,7 +62,9 @@ export class RobotView {
     this.world.add(this.sensorGroup);
 
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
-    this.camera.position.set(2.6, 1.5, -1.6);
+    // Distance ~2.49 m so the 1.32 m G1 fills the exact same vertical frame proportion (~73%)
+    // as the 1.70 m human skeleton at ~3.14 m in SkeletonView.
+    this.camera.position.set(2.05, 1.25, -1.35);
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.target.set(0, TARGET_HEIGHT, 0);
     this.controls.enableDamping = true;
@@ -88,9 +90,14 @@ export class RobotView {
   // Redraws the robot after the Simulation loaded another model (its geoms are not the same).
   rebuild() {
     for (const { object } of this.geoms) {
+      object.traverse((child) => {
+        if (child !== object && child.material?.userData?.ownedByClone) {
+          child.material.dispose();
+        }
+      });
       this.world.remove(object);
       object.geometry.dispose();
-      object.material.dispose();
+      if (object.material?.visible !== false) object.material.dispose();
     }
     this.geoms = this.buildGeoms();
   }

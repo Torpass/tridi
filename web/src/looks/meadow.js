@@ -8,7 +8,7 @@ import { atmosphere, canvasTexture, disposeGroup, floor, hideViewerFloor, inWalk
 import { windNow } from './currents.js';
 
 const BLADES = SMALL_SCREEN ? 9000 : 24000;
-const GRASS_RADIUS_M = 22;
+const GRASS_RADIUS_M = 18.5;
 // How far a blade's tip leans per m/s of wind, as a share of its height, and the most it leans.
 const LEAN_PER_MPS = 0.035;
 const MAX_LEAN = 0.55;
@@ -180,12 +180,59 @@ export function dressMeadow(view, wind = () => windNow(view)) {
   grass.receiveShadow = true;
   group.add(grass);
 
+  // Delimited wind-test paddock court around the mowed path (x: ±2.9 m, z: -13.5..+3.8 m):
+  // timber & steel perimeter rail fence + floor border + rolling 360° perimeter hills so the grass never cuts off.
+  const fenceWood = new THREE.MeshStandardMaterial({ color: 0x4b3828, roughness: 0.85 });
+  const fenceMetal = new THREE.MeshStandardMaterial({ color: 0x2c3227, roughness: 0.6, metalness: 0.4 });
+  const limeTrim = new THREE.MeshStandardMaterial({ color: 0xc8ff2e, emissive: 0xc8ff2e, emissiveIntensity: 0.25, roughness: 0.4 });
+  const padW = 5.8;
+  const padNear = 3.8;
+  const padFar = -13.5;
+  const padLen = padNear - padFar;
+  const padMidZ = (padNear + padFar) / 2;
+  const addBox = (w, h, d, mat, x, y, z) => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    mesh.position.set(x, y, z);
+    mesh.castShadow = mesh.receiveShadow = true;
+    group.add(mesh);
+  };
+  // Low stone/concrete curb + lime stripe around the wind-test track
+  addBox(padW, 0.05, 0.14, fenceMetal, 0, 0.025, padNear);
+  addBox(padW, 0.05, 0.14, fenceMetal, 0, 0.025, padFar);
+  addBox(0.14, 0.05, padLen + 0.14, fenceMetal, -padW / 2, 0.025, padMidZ);
+  addBox(0.14, 0.05, padLen + 0.14, fenceMetal, padW / 2, 0.025, padMidZ);
+  addBox(0.03, 0.006, padLen, limeTrim, -padW / 2, 0.054, padMidZ);
+  addBox(0.03, 0.006, padLen, limeTrim, padW / 2, 0.054, padMidZ);
+  // Paddock fence posts and twin rails along both sides of the test track
+  for (const side of [-1, 1]) {
+    const fx = side * (padW / 2);
+    for (let z = padNear; z >= padFar; z -= 2.88) {
+      addBox(0.11, 0.88, 0.11, fenceWood, fx, 0.44, z);
+    }
+    addBox(0.04, 0.07, padLen, fenceWood, fx - side * 0.04, 0.42, padMidZ);
+    addBox(0.04, 0.07, padLen, fenceWood, fx - side * 0.04, 0.76, padMidZ);
+  }
+  // 360° ring of rolling meadow hills (r = 18..34 m) enclosing the horizon
+  const hillMat = new THREE.MeshStandardMaterial({ color: 0x455124, roughness: 0.96, flatShading: true });
+  for (let i = 0; i < 20; i++) {
+    const ang = (i / 20) * Math.PI * 2 + (rand() - 0.5) * 0.12;
+    const dist = 21 + (i % 3) * 4.5;
+    const hillR = 6.5 + (i % 4) * 1.8;
+    const hillH = 2.2 + (i % 3) * 1.1;
+    const hill = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), hillMat);
+    hill.scale.set(hillR * 1.35, hillH, hillR);
+    hill.position.set(Math.cos(ang) * dist, -0.35 * hillH, Math.sin(ang) * dist);
+    hill.rotation.y = ang + Math.PI / 2;
+    hill.receiveShadow = true;
+    group.add(hill);
+  }
+
   const white = new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.6 });
   const turbines = [];
-  // All around and within the camera's 100 m reach; at half size the rotors sit inside the frame.
-  for (const [x, z, s] of [[-55, -62, 0.5], [-14, -82, 0.45], [32, -72, 0.55], [72, -28, 0.5], [66, 46, 0.45], [-76, 18, 0.5], [-30, 76, 0.55], [26, 82, 0.45]]) {
+  // Compact wind-field ring around the test pad so turbines and wind flags sit close in frame.
+  for (const [x, z, s] of [[-18, -22, 0.28], [-6, -26, 0.25], [14, -22, 0.3], [22, -9, 0.26], [19, 15, 0.25], [-22, 8, 0.26], [-11, 22, 0.28], [9, 24, 0.25]]) {
     const t = turbine(white);
-    t.group.position.set(x, -2, z);
+    t.group.position.set(x, -1, z);
     t.group.scale.setScalar(s);
     t.rotor.rotation.z = rand() * Math.PI;
     group.add(t.group);
@@ -193,7 +240,7 @@ export function dressMeadow(view, wind = () => windNow(view)) {
   }
   const flagUniforms = { uTime: uniforms.uTime, uLean: { value: 0 } };
   const banner = flag(flagUniforms);
-  banner.group.position.set(2.6, 0, -3.5);
+  banner.group.position.set(1.75, 0, -2.2);
   group.add(banner.group);
 
   let lean = 0;

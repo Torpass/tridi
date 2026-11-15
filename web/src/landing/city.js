@@ -12,11 +12,10 @@
 // where it ends either way), with 6 towers (none on phones) and only the props that say "street".
 // Everything is added on dress and taken out on undress, so the app screens keep their look.
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { Sky } from 'three/addons/objects/Sky.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { loadKenneyGlb } from '../props.js';
 
-const BASE = `${import.meta.env.BASE_URL}models/kenney/`;
 const BUILDINGS = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((k) => `commercial/building-${k}.glb`);
 const TOWERS = ['a', 'b', 'c'].map((k) => `commercial/building-skyscraper-${k}.glb`);
 // Kenney's commercial buildings are about 1 unit wide and 0.43 units a floor: at 8 m a unit a floor
@@ -64,19 +63,22 @@ const WALL_SHADE = 0.2;
 const GLASS_SWATCH = { x: [11 / 16, 12 / 16], y: [1 / 4, 2 / 4] }; // as a share of the colormap
 const WINDOW_LIGHT = { color: 0xffa451, intensity: 0.75 };
 
-const loader = new GLTFLoader();
 const cache = new Map();
 // Each model once: shadows off (only the robot casts one) and, for the buildings, the window glow.
 function load(file) {
   if (!cache.has(file)) {
     cache.set(
       file,
-      loader.loadAsync(BASE + file).then(({ scene }) => {
+      loadKenneyGlb(file).then(({ scene: rawScene }) => {
+        const scene = rawScene.clone(true);
         scene.traverse((o) => {
           if (!o.isMesh) return;
           o.castShadow = false;
           o.receiveShadow = file.startsWith('commercial');
-          if (file.startsWith('commercial') && o.material.map) dusk(o.material);
+          if (file.startsWith('commercial') && o.material.map) {
+            o.material = o.material.clone();
+            dusk(o.material);
+          }
         });
         scene.userData.size = new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3());
         return scene;
@@ -117,9 +119,15 @@ function random(seed) {
   };
 }
 
-function canvasTexture(renderer, width, height, draw, { repeat = true } = {}) {
-  const canvas = Object.assign(document.createElement('canvas'), { width, height });
-  draw(canvas.getContext('2d'), width, height);
+const canvasCache = new Map();
+
+function canvasTexture(renderer, key, width, height, draw, { repeat = true } = {}) {
+  let canvas = canvasCache.get(key);
+  if (!canvas) {
+    canvas = Object.assign(document.createElement('canvas'), { width, height });
+    draw(canvas.getContext('2d'), width, height);
+    canvasCache.set(key, canvas);
+  }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   if (repeat) texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
@@ -215,8 +223,8 @@ function drawRoad(ctx, w, h) {
 }
 
 function floors(renderer, add) {
-  const sidewalk = canvasTexture(renderer, SIDEWALK_PERIOD_M * SIDEWALK_PX, SIDEWALK_PERIOD_M * SIDEWALK_PX, (ctx, size) => drawSidewalk(ctx, size));
-  const road = canvasTexture(renderer, ROAD_PERIOD_M * ROAD_PX, (CURB_Z - FAR_CURB_Z) * ROAD_PX, drawRoad);
+  const sidewalk = canvasTexture(renderer, 'city-sidewalk', SIDEWALK_PERIOD_M * SIDEWALK_PX, SIDEWALK_PERIOD_M * SIDEWALK_PX, (ctx, size) => drawSidewalk(ctx, size));
+  const road = canvasTexture(renderer, 'city-road', ROAD_PERIOD_M * ROAD_PX, (CURB_Z - FAR_CURB_Z) * ROAD_PX, drawRoad);
   // A floor strip along the street, from z0 to z1, at height y.
   const strip = (z0, z1, y, map, period) => {
     const depth = z1 - z0;
@@ -373,6 +381,7 @@ function car(b, x, z, dir, color) {
 function poolTexture(renderer) {
   return canvasTexture(
     renderer,
+    'city-pool',
     128,
     128,
     (ctx, w) => {
@@ -392,6 +401,7 @@ function crosswalkTexture(renderer) {
   const depth = CURB_Z - FAR_CURB_Z;
   return canvasTexture(
     renderer,
+    'city-crosswalk',
     width * ROAD_PX,
     depth * ROAD_PX,
     (ctx, w, h) => {

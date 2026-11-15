@@ -32,6 +32,7 @@ const STRING_MODULES = [
   '../src/landing/strings.js',
   '../src/strings-stage.js',
   '../src/strings-training.js',
+  '../src/screens/strings/assembler.js',
   '../src/screens/strings/delivery.js',
   '../src/screens/strings/live.js',
   '../src/screens/strings/milestones.js',

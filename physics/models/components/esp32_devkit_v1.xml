@@ -1,0 +1,32 @@
+<mujoco model="component_esp32_devkit_v1">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.045">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <body name="board_turntable" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.015" diaginertia="0.0001 0.0001 0.0001"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.05" armature="0.002"/>
+        <!-- Matte dark ESP32 DevKit V1 PCB (55 x 28 mm, scaled 2x for 3D inspection) -->
+        <geom name="esp32_pcb" type="box" pos="0 0 0" size="0.055 0.028 0.0028" group="2" rgba="0.10 0.12 0.15 1"/>
+        <geom name="wroom32_shield" type="box" pos="0.018 0 0.006" size="0.018 0.016 0.0032" group="2" rgba="0.82 0.84 0.88 1"/>
+        <geom name="pcb_antenna" type="box" pos="0.044 0 0.003" size="0.008 0.016 0.001" group="2" rgba="0.85 0.72 0.22 1"/>
+        <geom name="micro_usb" type="box" pos="-0.052 0 0.005" size="0.006 0.008 0.003" group="2" rgba="0.78 0.80 0.84 1"/>
+        <geom name="cp2102_uart" type="box" pos="-0.026 0 0.004" size="0.006 0.006 0.0015" group="2" rgba="0.08 0.08 0.10 1"/>
+        <geom name="btn_en" type="cylinder" pos="-0.042 0.018 0.005" size="0.0035 0.0025" group="2" rgba="0.85 0.85 0.85 1"/>
+        <geom name="btn_boot" type="cylinder" pos="-0.042 -0.018 0.005" size="0.0035 0.0025" group="2" rgba="0.85 0.85 0.85 1"/>
+        <geom name="hdr_left" type="box" pos="-0.004 0.024 0.006" size="0.046 0.0025 0.004" group="2" rgba="0.12 0.12 0.14 1"/>
+        <geom name="hdr_right" type="box" pos="-0.004 -0.024 0.006" size="0.046 0.0025 0.004" group="2" rgba="0.12 0.12 0.14 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="demo_actuator" joint="demo_joint" kp="3.0" ctrlrange="-3.14 3.14" ctrllimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>

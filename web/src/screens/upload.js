@@ -3,6 +3,7 @@
 // goes straight to training (training.js), and the screen follows it to its delivery.
 // The server API is data/live's client (docs/contrato.md); this screen only draws it.
 import { chooseSubject, fetchClip, firstFrameUrl, UploadError, uploadVideo, watchJob } from '../../../data/live/src/upload.js';
+import { appHeaderHTML, mountAppHeader } from '../header.js';
 import { createVideoOverlay } from '../video-overlay.js';
 import { addUserClip } from '../preloaded.js';
 import { cannotTrain, mountTrainBox, startTraining, trainBoxHTML } from '../training.js';
@@ -48,10 +49,7 @@ function videoSeconds(file) {
 export function mount(root, { api }) {
   root.innerHTML = `
     <section class="page upload" data-step="checking">
-      <header class="page-head">
-        <a class="back" href="#/" ${A({ 'aria-label': 'back' })}>←<span class="only-wide">&nbsp;${T('back')}</span></a>
-        <h1>${T('head')}</h1>
-      </header>
+      ${appHeaderHTML({ current: 'upload' })}
       <div class="upload-grid">
         <section class="pane example-pane">
           <p class="pane-label"><span class="only-wide">${T('exampleWide')}</span><span class="only-narrow">${T('exampleNarrow')}</span></p>
@@ -98,7 +96,8 @@ export function mount(root, { api }) {
             <p class="lead done-text"></p>
             ${trainBoxHTML()}
             <div class="row">
-              <button class="primary again" type="button">${T('again')}</button>
+              <a class="button primary see-clip" href="#/simulations">${T('seeSim')}</a>
+              <button class="again" type="button">${T('again')}</button>
               <a class="button" href="#/">${T('home')}</a>
             </div>
           </div>
@@ -235,6 +234,7 @@ export function mount(root, { api }) {
     // that cannot be trained (too little of the body seen) shows why instead; coming back to this
     // screen does not start it twice (startTraining keeps one run per clip).
     const item = { clip: session.clips[0].id, data: session.clips[0] };
+    $('.see-clip').href = `#/simulations/${encodeURIComponent(session.clips[0].id)}`;
     trainBox.show(item);
     if (!cannotTrain(item, api)) startTraining(item, api);
     show('done');
@@ -319,7 +319,9 @@ export function mount(root, { api }) {
     show('pick');
   });
 
+  const unHeader = mountAppHeader(root);
   return () => {
+    unHeader();
     gone = true;
     abort?.abort(); // stops polling; the server keeps processing
     cancelAnimationFrame(exampleFrame);

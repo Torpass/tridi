@@ -27,6 +27,7 @@ export const { T, t, A } = dict({
   frameAlt: { es: 'Primer cuadro del video con las personas encontradas', en: 'First frame of the video with the people found' },
   meanwhile: { es: 'Puedes <a href="#/live">probar la cámara en vivo</a> mientras tanto: tu video sigue aquí.', en: 'You can <a href="#/live">try the live camera</a> meanwhile: your video stays here.' },
   done: { es: '¡Listo!', en: 'Done!' },
+  seeSim: { es: 'Abrir en la simulación', en: 'Open in simulation' },
   again: { es: 'Subir otro video', en: 'Upload another video' },
   home: { es: 'Volver al inicio', en: 'Back to home' },
   failedHead: { es: 'No se pudo', en: 'It did not work' },

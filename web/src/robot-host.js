@@ -2,12 +2,15 @@
 // and the shaders, so it happens once, when the page opens (main.js starts it; the robot panes
 // show its progress). Screens borrow its canvas: attach() moves it into their pane, and leaving the
 // screen takes it out, where physics/ pauses it. A WebGL context survives being moved.
-import { createSimView } from 'tridi-physics';
+import { createSimView, WORLDS } from 'tridi-physics';
 import { FINAL_LEVEL, policyUrls } from './policies.js';
+import { clearStageProps } from './props.js';
 import { SCENE_THEME } from './skeleton.js';
 
 const canvas = document.createElement('canvas');
 canvas.className = 'robot-canvas';
+canvas.setAttribute('role', 'img');
+canvas.setAttribute('aria-label', '3D MuJoCo physics simulation viewport');
 
 let ready = null;
 let view = null;
@@ -57,8 +60,27 @@ export function onRobotProgress(listener) {
 export function attachRobot(pane) {
   pane.prepend(canvas);
   let attached = true;
-  const handed = loadRobot().then((loaded) => {
+  const handed = loadRobot().then(async (loaded) => {
     if (!attached) return null;
+    const onSims = /^#\/(simulations|simulaciones)(\/|$)/.test(location.hash);
+    if (!onSims) {
+      clearStageProps(loaded);
+      if (loaded.scene?.()) {
+        await loaded.setScene(null);
+      }
+      if (loaded.world?.() && loaded.world().id !== 'plano') {
+        await loaded.setWorld(WORLDS.find((world) => world.id === 'plano'));
+      }
+      if (loaded.sim?.policy?.robot && loaded.sim.policy.robot !== 'unitree_g1') {
+        try {
+          const { onnx, json } = policyUrls(FINAL_LEVEL);
+          await loaded.loadPolicy(onnx, json);
+        } catch (error) {
+          console.error(error);
+        }
+      }
+      if (!attached) return null;
+    }
     loaded.stop(); // ends a clip or a camera copy and stands the robot up
     loaded.setSpeed(1);
     loaded.play();

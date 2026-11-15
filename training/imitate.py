@@ -184,24 +184,76 @@ def load_motions(model: mujoco.MjModel, motions: list[str], feet=None, soles=Non
     return [Motion(motion_path(m), model, feet, soles) for m in motions]
 
 
+CLIP_ALIASES: dict[str, str] = {
+    "caminar": "clip_2026-10-23_caminar-perfil_01-balanced",
+    "caminar-01": "clip_caminar-01-gvhmr-balanced",
+    "caminar-02": "clip_caminar-02-gvhmr-balanced",
+    "caminar-perfil": "clip_caminar-perfil-gvhmr-balanced",
+    "frente": "clip_frente-04-gvhmr-balanced",
+    "correr": "clip_2026-10-23_correr-perfil_01-balanced",
+    "saludar": "clip_saludar-02-gvhmr-balanced",
+    "sentarse": "clip_sentarse-02-gvhmr-balanced",
+    "bailar": "clip_bailar-01-gvhmr-balanced",
+    "jacks": "clip_jacks-01-gvhmr-balanced",
+}
+
+
+def resolve_clips(motion: str | tuple[str, ...] | list[str] | None) -> tuple[str, ...]:
+    """Expand a clip id, comma-separated list ('caminar,frente'), preset ('all-walks'), or folder path."""
+    if motion is None:
+        return (DEFAULT_MOTION,)
+    if isinstance(motion, (tuple, list)):
+        out: list[str] = []
+        for item in motion:
+            out.extend(resolve_clips(item))
+        return tuple(dict.fromkeys(out)) or (DEFAULT_MOTION,)
+    spec = motion.strip()
+    if not spec:
+        return (DEFAULT_MOTION,)
+    if spec == "all-walks":
+        return (
+            "clip_2026-10-23_caminar-perfil_01-balanced",
+            "clip_caminar-01-gvhmr-balanced",
+            "clip_caminar-02-gvhmr-balanced",
+            "clip_caminar-perfil-gvhmr-balanced",
+            "clip_frente-04-gvhmr-balanced",
+        )
+    if spec == "all-g1":
+        return tuple(CLIP_ALIASES.values())
+    if "," in spec:
+        return tuple(resolve_clips(c.strip())[0] for c in spec.split(",") if c.strip())
+    if spec in CLIP_ALIASES:
+        return (CLIP_ALIASES[spec],)
+    p = Path(spec)
+    if p.is_dir():
+        files = sorted(str(f) for f in p.glob("*.json"))
+        if files:
+            return tuple(files)
+    return (spec,)
+
+
 def motion_robot(motion: str) -> str:
     """The robot package a RobotMotion is for: its "robot_package" (training.retarget), else the G1."""
-    return json.loads(motion_path(motion).read_text()).get("robot_package", "g1")
+    first = resolve_clips(motion)[0]
+    return json.loads(motion_path(first).read_text()).get("robot_package", "g1")
 
 
 class MimicEnv(G1Env):
-    def __init__(self, seed: int = 0, clips: tuple[str, ...] = (DEFAULT_MOTION,), push: bool = False,
+    def __init__(self, seed: int = 0, clips: tuple[str, ...] | str = (DEFAULT_MOTION,), push: bool = False,
                  push_n: tuple[float, float] | None = None, push_every: tuple[float, float] | None = None,
                  nudge: bool = False, follow: bool = False, recover: bool | float = False,
-                 sense_velocity: bool = False):
+                 sense_velocity: bool = False, fault_prob: float = 0.0,
+                 sudden_stop_prob: float = 0.0):
         """nudge: every reset starts off the reference pose as G1Env's resets do (each joint
         N(0, INIT_JOINT_NOISE), each speed N(0, INIT_VEL_NOISE)). Without it the walk learned from
         exact starts only: one seed reached the end from 90 % of nudged starts, the other 25 %."""
+        clips = resolve_clips(clips)
         robot = motion_robot(clips[0])
         extra = {k: v for k, v in (("push_n", push_n), ("push_every", push_every)) if v is not None}
-        super().__init__(seed=seed, push=push, robot=robot, **extra)
+        super().__init__(seed=seed, push=push, robot=robot, fault_prob=fault_prob, **extra)
         self.nudge = nudge
         self.follow = follow
+        self.sudden_stop_prob = float(sudden_stop_prob)
         # recover: True for RECOVER_S, or the window in seconds
         self.recover_s = (RECOVER_S if recover is True else float(recover)) if recover else 0.0
         self.shift = np.zeros(2)  # how far the path has slid with the robot (follow)
@@ -220,11 +272,17 @@ class MimicEnv(G1Env):
         # (on a real robot it is estimated).
         self.sense_velocity = sense_velocity
         self.obs_dim = mimic_obs_dim(self.nu, sense_velocity)
-        self.motions = load_motions(self.model, list(clips), feet, soles)
+        self.clip_names = list(clips)
+        self.motions = load_motions(self.model, self.clip_names, feet, soles)
+        self.clip_fail_ema = np.ones(len(self.motions), dtype=np.float64) * 0.5
+        self.clip_idx = 0
         self.feet_ids = list(self.feet)
         self.floor = self.model.geom("floor").id
         self.motion = self.motions[0]
         self.t = 0.0
+        self.ep_start_t = 0.0
+        self.stop_trigger_t = -1.0
+        self.stop_steps_left = 0
         self.ref_next = self.default
 
     # --- Observation and action ------------------------------------------------------------------
@@ -269,8 +327,21 @@ class MimicEnv(G1Env):
 
     # --- Episode ---------------------------------------------------------------------------------
 
+    def _pick_clip_index(self) -> int:
+        """Failure-weighted multi-clip sampling: clips where the robot falls earlier get sampled more."""
+        n = len(self.motions)
+        if n <= 1:
+            return 0
+        total = float(np.sum(self.clip_fail_ema))
+        if total <= 1e-6:
+            return int(self.rng.integers(n))
+        probs = 0.30 / n + 0.70 * (self.clip_fail_ema / total)
+        probs /= probs.sum()
+        return int(self.rng.choice(n, p=probs))
+
     def reset(self) -> np.ndarray:
-        self.motion = self.motions[self.rng.integers(len(self.motions))]
+        self.clip_idx = self._pick_clip_index()
+        self.motion = self.motions[self.clip_idx]
         start = self.rng.uniform(0, max(0.0, self.motion.duration - MIN_REMAINING_S))
         if self.nudge and self.rng.random() < START_SHARE:
             start = 0.0
@@ -285,7 +356,18 @@ class MimicEnv(G1Env):
         return obs
 
     def sample(self, t: float):
-        """The reference at time t, slid by `shift` in the floor plane (follow)."""
+        """The reference at time t, slid by `shift` in the floor plane (follow) and halted during a sudden stop."""
+        if self.stop_steps_left > 0:
+            q, _, _, feet = self.motion.sample(self.t)
+            q = q.copy()
+            # During an emergency stop, command upright standing joints and zero velocity
+            q[7:] = 0.7 * self.default + 0.3 * q[7:]
+            q[2] = self.stand_height
+            if self.shift.any():
+                feet = feet.copy()
+                q[:2] += self.shift
+                feet[:, :2] += self.shift
+            return q, np.zeros(3), np.zeros(self.nu), feet
         q, root_vel, joint_vel, feet = self.motion.sample(t)
         if self.shift.any():
             q, feet = q.copy(), feet.copy()
@@ -295,8 +377,16 @@ class MimicEnv(G1Env):
 
     def reset_at(self, t: float) -> np.ndarray:
         """Start the episode at second t of the current clip, in its reference pose."""
+        self._apply_actuator_fault()
         self.t = t
+        self.ep_start_t = t
         self.shift = np.zeros(2)
+        self.stop_steps_left = 0
+        if self.sudden_stop_prob > 0.0 and self.rng.random() < self.sudden_stop_prob:
+            rem = max(0.5, self.motion.duration - t - 0.5)
+            self.stop_trigger_t = t + float(self.rng.uniform(0.3, rem))
+        else:
+            self.stop_trigger_t = -1.0
         q, root_vel, joint_vel, _ = self.motion.sample(self.t)
         d = self.data
         mujoco.mj_resetData(self.model, d)
@@ -333,11 +423,17 @@ class MimicEnv(G1Env):
         for _ in range(self.decimation):
             mujoco.mj_step(self.model, self.data)
         self.steps += 1
-        self.t += CONTROL_DT
+        if self.stop_trigger_t > 0.0 and self.t >= self.stop_trigger_t:
+            self.stop_trigger_t = -1.0
+            self.stop_steps_left = int(self.rng.integers(50, 100))  # 1.0 to 2.0 s emergency halt at 50 Hz
+        if self.stop_steps_left > 0:
+            self.stop_steps_left -= 1
+        else:
+            self.t += CONTROL_DT
         reward, info = self.reward(ctrl)
         self.prev_ctrl = ctrl
         q_ref = self.sample(self.t)[0]
-        if self.follow:
+        if self.follow or self.stop_steps_left > 0:
             gap = self.data.qpos[:2] - q_ref[:2]
             dist = np.linalg.norm(gap)
             if dist > FOLLOW_M:
@@ -346,6 +442,11 @@ class MimicEnv(G1Env):
         off_track = np.linalg.norm(self.data.qpos[:2] - q_ref[:2]) > MAX_ROOT_ERROR_M
         fell = self.fallen() or off_track
         done = self.t >= self.motion.duration
+        if (fell or done) and len(self.motions) > 1:
+            expected = max(CONTROL_DT, self.motion.duration - self.ep_start_t)
+            survived = np.clip((self.t - self.ep_start_t) / expected, 0.0, 1.0)
+            fail_score = 1.0 if fell else max(0.05, 1.0 - float(survived))
+            self.clip_fail_ema[self.clip_idx] = 0.85 * self.clip_fail_ema[self.clip_idx] + 0.15 * fail_score
         return self.observe(), reward, fell, done and not fell, info
 
     def reward(self, ctrl: np.ndarray) -> tuple[float, dict]:

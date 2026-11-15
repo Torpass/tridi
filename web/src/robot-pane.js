@@ -24,7 +24,19 @@ export function robotPaneHTML(label, { push = true } = {}) {
         <p class="robot-status">${T('preparing')}</p>
       </div>
       <p class="pane-label">${label}</p>
-      ${push ? `<button class="push" type="button" disabled>${T('push')}</button>` : ''}
+      ${
+        push
+          ? `<div class="push-group">
+        <div class="push-force-pills" role="group" aria-label="Push force in Newtons">
+          <button type="button" class="push-force-pill" data-force="100">100 N</button>
+          <button type="button" class="push-force-pill active" data-force="150" aria-pressed="true">150 N</button>
+          <button type="button" class="push-force-pill" data-force="300">300 N</button>
+          <button type="button" class="push-force-pill" data-force="500">500 N</button>
+        </div>
+        <button class="push" type="button" disabled>${T('push')}</button>
+      </div>`
+          : ''
+      }
     </section>`;
 }
 
@@ -61,6 +73,18 @@ export function mountRobotPane(pane, { beforePush } = {}) {
         frameId = requestAnimationFrame(frame);
       });
       const push = $('.push');
+      let forceN = 150;
+      const forcePills = [...pane.querySelectorAll('.push-force-pill')];
+      forcePills.forEach((pill) => {
+        pill.onclick = () => {
+          forceN = Number(pill.dataset.force) || 150;
+          forcePills.forEach((p) => {
+            const active = p === pill;
+            p.classList.toggle('active', active);
+            p.setAttribute('aria-pressed', String(active));
+          });
+        };
+      });
       if (push) {
         push.disabled = false;
         // The push the trained robot holds, once it has stood a moment (push.js). A robot playing
@@ -68,7 +92,8 @@ export function mountRobotPane(pane, { beforePush } = {}) {
         push.onclick = () => {
           beforePush?.();
           if (view.sim.puppeted) view.stop();
-          pushWhenReady(pushed, view, () => arrow?.point(view), () => !disposed);
+          const scale = Math.max(0.6, Math.min(1.5, forceN / 200));
+          pushWhenReady(pushed, view, () => arrow?.point(view, scale), () => !disposed, forceN);
         };
       }
     })

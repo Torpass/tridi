@@ -37,7 +37,10 @@ function random(seed) {
   };
 }
 
+let cachedStreetCanvas = null;
+
 function drawStreet() {
+  if (cachedStreetCanvas) return cachedStreetCanvas;
   const size = PERIOD_M * PX_PER_M;
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -70,6 +73,7 @@ function drawStreet() {
     ctx.fillStyle = rand() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.12)';
     ctx.fillRect(rand() * size, rand() * size, 2, 2);
   }
+  cachedStreetCanvas = canvas;
   return canvas;
 }
 

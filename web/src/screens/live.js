@@ -10,6 +10,7 @@
 // interface as the webcam, so everything below (the skeleton, mimic, recording) does not know which
 // camera it is, and the image goes where the webcam's video would, under the skeleton. Without the
 // server the button only says why; the webcam is untouched.
+import { appHeaderHTML, mountAppHeader } from '../header.js';
 import { addUserClip } from '../preloaded.js';
 import { mountRobotPane, robotPaneHTML } from '../robot-pane.js';
 import { escapeHtml } from '../i18n.js';
@@ -35,7 +36,7 @@ const MAX_RECORD_S = 30;
 const MIN_RECORD_S = 2;
 // The page the QR sends the phone to. The deployed web in development: the phone cannot reach a
 // dev server on this machine, and its camera needs HTTPS, which a LAN address does not have.
-const PHONE_WEB = ['localhost', '127.0.0.1'].includes(location.hostname) ? 'https://tridi-alpha.vercel.app/' : `${location.origin}${location.pathname}`;
+const PHONE_WEB = ['localhost', '127.0.0.1'].includes(location.hostname) ? 'https://trytridi.com/' : `${location.origin}${location.pathname}`;
 // A server on this machine is out of the phone's reach too.
 const LOCAL_API = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/;
 
@@ -74,10 +75,7 @@ const clock = (seconds) => `${Math.floor(seconds / 60)}:${String(Math.floor(seco
 export function mount(root, { api }) {
   root.innerHTML = `
     <section class="page live">
-      <header class="page-head">
-        <a class="back" href="#/" ${A({ 'aria-label': 'back' })}>←<span class="only-wide">&nbsp;${T('back')}</span></a>
-        <h1>${T('head')}</h1>
-      </header>
+      ${appHeaderHTML({ current: 'live' })}
       <div class="live-grid">
         <section class="pane camera-pane">
           <video playsinline muted></video>
@@ -393,7 +391,9 @@ export function mount(root, { api }) {
   $('.record-toggle').onclick = saveRecording;
   $('.again').onclick = () => (live ? startRecording() : start());
 
+  const unHeader = mountAppHeader(root);
   return () => {
+    unHeader();
     disposed = true;
     clearInterval(recordTimer);
     stop(); // a recording in progress is kept: it is in the simulations when the user comes back

@@ -2,6 +2,7 @@
 // does not wait for MuJoCo, the robot or MediaPipe.
 import * as home from './screens/home.js';
 import { lang, onLang } from './i18n.js';
+import { mountScrollFade } from './scroll-fade.js';
 
 const titleOf = (screen) => {
   const title = typeof screen.title === 'object' ? (screen.title[lang()] ?? screen.title.es) : screen.title;
@@ -15,6 +16,7 @@ const ROUTES = {
   // A recorded clip's simulation (person and robot side by side, worlds, training): reached from En
   // vivo after recording, not from the home.
   simulations: () => import('./screens/simulations.js'),
+  assembler: () => import('./screens/assembler.js'), // P&ID (.dxf) + CAD (.stl + .ino) -> ISA-5.1 docs, 3D twin & PLC/C99 code
   delivery: () => import('./screens/delivery.js'),
   camera: () => import('./screens/phone.js'), // the phone as the live camera, opened from the QR on #/live
   net: () => import('./screens/net.js'), // a training's policy network in 3D, linked from the training box
@@ -22,7 +24,7 @@ const ROUTES = {
 };
 // Routes are always in English, whatever the page's language. The Spanish ones the app used until
 // 2026-11 still open (links in docs, QR codes, bookmarks): the address is rewritten to the English one.
-const OLD_NAMES = { 'en-vivo': 'live', subir: 'upload', simulaciones: 'simulations', entrega: 'delivery', camara: 'camera', red: 'net', avances: 'milestones' };
+const OLD_NAMES = { 'en-vivo': 'live', subir: 'upload', simulaciones: 'simulations', ensamblador: 'assembler', entrega: 'delivery', camara: 'camera', red: 'net', avances: 'milestones' };
 
 // The fade between screens; long enough to read as a transition, short enough not to wait on it.
 const FADE_MS = 180;
@@ -85,6 +87,7 @@ export function startRouter(app, context) {
     unmount?.();
     app.replaceChildren();
     unmount = screen.mount(app, context, params);
+    mountScrollFade(app);
     current = screen;
     document.title = titleOf(screen);
     window.scrollTo(0, 0);

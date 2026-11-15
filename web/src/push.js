@@ -20,7 +20,7 @@ export const GAP_S = 2.0;
  * @param land   called when the push lands (the arrow, the words)
  * @param may    whether a push may still land (a kept press is dropped if the page moved on)
  */
-export function pushWhenReady(state, view, land, may = () => true) {
+export function pushWhenReady(state, view, land, may = () => true, newtons = PUSH_N) {
   if (!may()) return;
   const t = view.sim.data.time;
   const sinceLast = state.lastT > t ? Infinity : t - state.lastT;
@@ -28,11 +28,11 @@ export function pushWhenReady(state, view, land, may = () => true) {
   if (wait > 0) {
     state.queued ||= setTimeout(() => {
       state.queued = 0;
-      pushWhenReady(state, view, land, may);
+      pushWhenReady(state, view, land, may, newtons);
     }, wait * 1000);
     return;
   }
   state.lastT = t;
-  view.push(undefined, PUSH_N);
+  view.push(undefined, newtons);
   land?.();
 }

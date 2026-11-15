@@ -298,13 +298,15 @@ export class Simulation {
 
     // Horizontal and vertical pelvis tracking (generalized forces in world x, y, z).
     // Damping ratios are tuned close to critical damping so foot contacts do not chatter at 50 Hz.
+    // Vertical support (310 N feedforward + kpZ = 2200) prevents single-leg stance pelvis sag so the
+    // swing foot never scrapes the floor and pulls the torso into a forward lean.
     const kpXY = 640 * scale;
     const kdXY = 95 * scale;
-    const kpZ = 1350 * motor;
+    const kpZ = 2200 * motor;
     const kdZ = 145 * motor;
     data.qfrc_applied[0] = kpXY * (q[0] - qpos[0]) + kdXY * (rootVel[0] - qvel[0]);
     data.qfrc_applied[1] = kpXY * (q[1] - qpos[1]) + kdXY * (rootVel[1] - qvel[1]);
-    data.qfrc_applied[2] = 140 * scale + kpZ * (q[2] - qpos[2]) + kdZ * (rootVel[2] - qvel[2]);
+    data.qfrc_applied[2] = 310 * scale + kpZ * (q[2] + 0.014 - qpos[2]) + kdZ * (rootVel[2] - qvel[2]);
 
     // Orientation tracking in the pelvis body frame: q_err = q_curr^-1 * q_ref.
     const [cw, cx, cy, cz] = [qpos[3], -qpos[4], -qpos[5], -qpos[6]];
@@ -318,7 +320,7 @@ export class Simulation {
       ey = -ey;
       ez = -ez;
     }
-    const kpRot = 420 * scale;
+    const kpRot = 520 * scale;
     const kdRot = 48 * scale;
     data.qfrc_applied[3] = kpRot * (2 * ex) - kdRot * qvel[3];
     data.qfrc_applied[4] = kpRot * (2 * ey) - kdRot * qvel[4];

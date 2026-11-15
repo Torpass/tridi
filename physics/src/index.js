@@ -1,7 +1,7 @@
 // Public API of physics/ for the web app: give it a canvas and it loads MuJoCo and the G1,
 // simulates in real time and draws every frame until dispose().
 import { Vector3 } from 'three';
-import { loadG1 } from './load.js';
+import { ensureModelFiles, loadG1 } from './load.js';
 import { LOOP_BLEND_S, motionDuration, retargetClipAsync, sampleLoopStart, sampleMotion, smoothForDisplay } from './motion.js';
 import { createPolicy } from './policy.js';
 import { createPoseTracker } from './pose.js';
@@ -16,11 +16,35 @@ import { HELD_OBJECT_SCENE, placeXml, SCENE_ORDER } from './scenes.js';
 import { middleValues, sceneFile as worldScene, windForce, windSpeed, WORLD_ORDER } from './worlds.js';
 
 export { HELD_OBJECT_SCENE } from './scenes.js';
+export {
+  getComponent,
+  getPreset,
+  HARDWARE_CATALOG,
+  listComponents,
+  registerComponent,
+  removeComponent,
+  validateHardwarePinout,
+} from '../components/index.js';
+export { classifyStlMeshes, generateMujocoXml, parseArduinoSketch } from './assembler.js';
+export {
+  generateIsaEngineeringDocs,
+  generatePidMujocoXml,
+  generatePlcFlatFile,
+  ISA_STANDARD,
+  parseDxfPid,
+  PID_SAMPLE_DXFS,
+} from './pid_assembler.js';
+
 export const ROBOTS = [
-  { id: 'g1', robot: 'unitree_g1', name: 'Unitree G1 (29 DOF + Inspire 5 dedos)' },
-  { id: 'luigi', robot: 'luigi_lab3', name: 'Robot Explorador Lab III — Luigi (Arduino UNO + HC-SR04 + APDS-9960)' },
-  { id: 'h1', robot: 'unitree_h1', name: 'Unitree H1 (19 DOF, open-source)' },
+  { id: 'g1', robot: 'unitree_g1', vertical: 'humanoids', name: 'Unitree G1 (29 DOF + Inspire 5 dedos)' },
+  { id: 'h1', robot: 'unitree_h1', vertical: 'humanoids', name: 'Unitree H1 (19 DOF, open-source)' },
+  { id: 'luigi_lab4', robot: 'luigi_lab4', vertical: 'rovers', name: 'Robot Explorador Lab IV — Luigi (Arduino UNO + Cuello Servo SG90 + HC-SR04)' },
+  { id: 'luigi', robot: 'luigi_lab3', vertical: 'rovers', name: 'Robot Explorador Lab III — Luigi (Arduino UNO + HC-SR04 + APDS-9960)' },
+  { id: 'factory_cell', robot: 'factory_cell', vertical: 'industrial', name: 'Celda Industrial de Empaque y Clasificación (Cinta + Pistón + Selladora)' },
 ];
+
+const CUSTOM_SCENE_PREFIXES = ['unitree_h1/', 'luigi_lab3/', 'luigi_lab4/', 'factory_cell/'];
+const isCustomScenePath = (scenePath = '') => CUSTOM_SCENE_PREFIXES.some((p) => scenePath.startsWith(p));
 
 // The fingers' smoothing: faster than the body's (ROBOT_POSE_FILTER, 1.5 Hz) because fingers open
 // and close in a fraction of a second, and they are only drawn (no feet to keep planted).
@@ -39,6 +63,60 @@ export const SCENES = Object.values(SCENE_FILES).sort((a, b) => SCENE_ORDER.inde
 
 // The real-time ratio passed to onStats is averaged over this window so it reads steadily.
 const STATS_WINDOW_S = 1;
+
+// Module-level caches for policy bytes (.onnx), metadata/motion JSON, and smoothed display motions.
+const onnxBytesCache = new Map();
+const jsonAssetCache = new Map();
+const smoothedMotionCache = new WeakMap();
+
+export function fetchCachedOnnxBytes(url) {
+  if (!onnxBytesCache.has(url)) {
+    onnxBytesCache.set(
+      url,
+      fetch(url)
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+          return new Uint8Array(await res.arrayBuffer());
+        })
+        .catch((err) => {
+          onnxBytesCache.delete(url);
+          throw err;
+        }),
+    );
+  }
+  return onnxBytesCache.get(url);
+}
+
+export function fetchCachedJson(url) {
+  if (!jsonAssetCache.has(url)) {
+    jsonAssetCache.set(
+      url,
+      fetch(url)
+        .then(async (res) => {
+          if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+          return res.json();
+        })
+        .catch((err) => {
+          jsonAssetCache.delete(url);
+          throw err;
+        }),
+    );
+  }
+  return jsonAssetCache.get(url);
+}
+
+function getSmoothedMotion(mujoco, model, motion, plantFeet) {
+  let byOption = smoothedMotionCache.get(motion);
+  if (!byOption) {
+    byOption = new Map();
+    smoothedMotionCache.set(motion, byOption);
+  }
+  const key = String(plantFeet);
+  if (!byOption.has(key)) {
+    byOption.set(key, smoothForDisplay(mujoco, model, motion, { plantFeet }));
+  }
+  return byOption.get(key);
+}
 
 /**
  * @param canvas  a <canvas> sized by CSS; the view follows its size. It can be moved between
@@ -278,7 +356,7 @@ export async function createSimView(canvas, { onProgress, onStats, mirror = true
      *   travel (a run seen from the side); true or false force it.
      */
     playClip(motion, { loop = true, plantFeet = 'auto' } = {}) {
-      if ((baseScene.startsWith('unitree_h1/') || baseScene.startsWith('luigi_lab3/')) && motion.robot === 'unitree_g1') {
+      if (isCustomScenePath(baseScene) && motion.robot === 'unitree_g1') {
         swapScene(worldScene(world), 'home');
       }
       // The robot's own values (36), not the model's: a place with loose objects adds 7 per object.
@@ -286,7 +364,7 @@ export async function createSimView(canvas, { onProgress, onStats, mirror = true
       if (motion.robot !== 'unitree_g1' || motion.qpos[0]?.length !== robotValues) {
         throw new Error(`This RobotMotion is not for the ${robotValues}-value G1 (robot: ${motion.robot}).`);
       }
-      clip = { motion: smoothForDisplay(sim.mujoco, kinematicModel(), motion, { plantFeet }), duration: motionDuration(motion), loop, shown: 0, wrapped: false };
+      clip = { motion: getSmoothedMotion(sim.mujoco, kinematicModel(), motion, plantFeet), duration: motionDuration(motion), loop, shown: 0, wrapped: false };
       clipTime = 0;
       if (!motion.hands) dex3?.show(false);
     },
@@ -318,27 +396,34 @@ export async function createSimView(canvas, { onProgress, onStats, mirror = true
      * Loading another policy of the same model only swaps the network (run by onnx-lite.js, a
      * few KB of JavaScript).
      */
-    async loadPolicy(onnx, meta, { motion } = {}) {
-      const bytes = typeof onnx === 'string' ? new Uint8Array(await (await fetch(onnx)).arrayBuffer()) : new Uint8Array(onnx);
-      if (typeof meta === 'string') meta = await (await fetch(meta)).json();
-      if (typeof motion === 'string') motion = await (await fetch(motion)).json();
+    async loadPolicy(onnx, meta, { motion, reset = true } = {}) {
+      const bytes = typeof onnx === 'string' ? await fetchCachedOnnxBytes(onnx) : new Uint8Array(onnx);
+      if (typeof meta === 'string') meta = await fetchCachedJson(meta);
+      if (typeof motion === 'string') motion = await fetchCachedJson(motion);
       // The policy's scene ('unitree_g1/scene_mjx.xml' -> 'scene_mjx.xml'; 'unitree_h1/scene.xml'
       // and 'luigi_lab3/scene.xml' stay in their subfolder), or the current world's version of it for the G1.
-      const isCustomRobot = meta.robot === 'unitree_h1' || meta.robot === 'luigi_lab3';
+      const isCustomRobot = meta.robot !== 'unitree_g1';
       const sceneFile = isCustomRobot ? meta.mjcf : world ? worldScene(world) : meta.mjcf.slice(meta.mjcf.indexOf('/') + 1);
+      if (isCustomRobot) await ensureModelFiles(sim.files, sceneFile);
       const { loadOrt } = await import('./ort.js');
       const ort = await loadOrt();
       const previous = { sceneFile: baseScene, keyName: sim.keyName };
-      if (baseScene !== sceneFile) swapScene(sceneFile, 'home');
-      else stop();
+      const sceneChanged = baseScene !== sceneFile;
+      if (sceneChanged) swapScene(sceneFile, 'home');
       if (isCustomRobot) dex3?.show(false);
-      view.targetHeight = meta.robot === 'luigi_lab3' ? 0.12 : 0.75;
+      // Only set targetHeight when OrbitControls is active; on the landing page (controls.enabled === false)
+      // directCamera() drives targetHeight (~1.52 m) for its shift-lens projection, so overwriting it to 0.75
+      // before view.render() made the robot jump vertically to half height during checkpoint transitions.
+      if (view.controls.enabled) {
+        view.targetHeight = meta.robot === 'luigi_lab3' || meta.robot === 'luigi_lab4' ? 0.12 : meta.robot === 'factory_cell' ? 0.35 : 0.75;
+      }
       try {
         const policy = await createPolicy(ort, sim, bytes, meta, { motion });
+        if (!sceneChanged && (clip || sim.puppeted)) stop();
         sim.policy?.dispose();
         sim.policy = policy;
         lastPolicy = { bytes, meta, motion };
-        sim.reset();
+        if (sceneChanged || reset) sim.reset();
       } catch (error) {
         if (baseScene !== previous.sceneFile) swapScene(previous.sceneFile, previous.keyName);
         throw error;
@@ -358,7 +443,7 @@ export async function createSimView(canvas, { onProgress, onStats, mirror = true
     async setWorld(next) {
       world = next;
       conditions = null; // a new world starts from its own middle values
-      const targetScene = baseScene.startsWith('unitree_h1/') || baseScene.startsWith('luigi_lab3/') ? baseScene : worldScene(next);
+      const targetScene = isCustomScenePath(baseScene) ? baseScene : worldScene(next);
       if (baseScene !== targetScene) {
         swapScene(targetScene, 'home');
         await restorePolicy();

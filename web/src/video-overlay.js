@@ -3,9 +3,20 @@
 // scripts/make-video-overlay.py). Clips without a video keep the 3D skeleton (skeleton.js).
 const BASE = import.meta.env.BASE_URL;
 
-// Clip id -> its source video and 2D skeleton (public/media).
+// Clip id -> its source video and optional 2D skeleton (public/media).
 export const VIDEOS = {
   'clip_2026-10-23_caminar-perfil_01': { video: 'media/caminar.mp4', pose: 'media/caminar.pose2d.json', credit: 'Mixkit 4855' },
+  'clip_caminar-perfil-gvhmr': { video: 'media/clips/clip_caminar-perfil-gvhmr.mp4', pip: true },
+  'clip_correr-perfil-gvhmr': { video: 'media/clips/clip_correr-perfil-gvhmr.mp4', pip: true },
+  'clip_frente-04-gvhmr': { video: 'media/clips/clip_frente-04-gvhmr.mp4', pip: true },
+  'clip_jacks-01-gvhmr': { video: 'media/clips/clip_jacks-01-gvhmr.mp4', pip: true },
+  'clip_bailar-01-gvhmr': { video: 'media/clips/clip_bailar-01-gvhmr.mp4', pip: true },
+  'clip_sentarse-02-gvhmr': { video: 'media/clips/clip_sentarse-02-gvhmr.mp4', pip: true },
+  'clip_caminar-01-gvhmr': { video: 'media/clips/clip_caminar-01-gvhmr.mp4', pip: true },
+  'clip_bailar-grupo-02-gvhmr': { video: 'media/clips/clip_bailar-grupo-02-gvhmr.mp4', pip: true },
+  'clip_saludar-02-gvhmr': { video: 'media/clips/clip_saludar-02-gvhmr.mp4', pip: true },
+  'clip_dedos-01-gvhmr': { video: 'media/clips/clip_dedos-01-gvhmr.mp4', pip: true },
+  'clip_lavar-04-gvhmr': { video: 'media/clips/clip_lavar-04-gvhmr.mp4', pip: true },
 };
 
 // The bones to draw, as MediaPipe Pose indices: shoulders, arms, torso, hips, legs and feet.
@@ -96,15 +107,36 @@ export function createPoseDrawing(video, canvas, { fit = 'contain' } = {}) {
  * @returns {{ show(clipId): Promise<boolean>, sync(time, playing, speed): void, dispose(): void }}
  */
 export function createVideoOverlay(pane) {
-  const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, loop: true, preload: 'auto' });
+  const pipWrap = Object.assign(document.createElement('div'), { className: 'source-pip-wrap', hidden: true });
+  const pipTag = Object.assign(document.createElement('span'), { className: 'source-pip-tag' });
+  pipTag.innerHTML = '<span class="t" lang="es">Video origen · Clic para ampliar</span><span class="t" lang="en">Source video · Click to expand</span>';
+  const video = Object.assign(document.createElement('video'), { muted: true, playsInline: true, loop: true, preload: 'metadata' });
   video.className = 'source-video';
   const canvas = Object.assign(document.createElement('canvas'), { className: 'source-overlay' });
-  pane.prepend(video, canvas);
+  pipWrap.append(video, pipTag);
+  pipWrap.onclick = () => {
+    if (!pane.classList.contains('has-pip-video')) return;
+    const expanded = pane.classList.toggle('pip-expanded');
+    pipTag.innerHTML = expanded
+      ? '<span class="t" lang="es">Ver esqueleto 3D · Minimizar</span><span class="t" lang="en">Show 3D skeleton · Minimize</span>'
+      : '<span class="t" lang="es">Video origen · Clic para ampliar</span><span class="t" lang="en">Source video · Click to expand</span>';
+  };
+  pane.prepend(pipWrap, canvas);
   const drawing = createPoseDrawing(video, canvas, { fit: 'contain' });
+  let activeEntry = null;
 
   async function show(clipId) {
-    const entry = VIDEOS[clipId];
-    pane.classList.toggle('has-video', Boolean(entry));
+    const entry = VIDEOS[clipId] ?? null;
+    activeEntry = entry;
+    const isFull = Boolean(entry && !entry.pip);
+    const isPip = Boolean(entry && entry.pip);
+    pane.classList.toggle('has-video', isFull);
+    pane.classList.toggle('has-pip-video', isPip);
+    pane.classList.remove('pip-expanded');
+    pipWrap.hidden = !entry;
+    if (isPip) {
+      pipTag.innerHTML = '<span class="t" lang="es">Video origen · Clic para ampliar</span><span class="t" lang="en">Source video · Click to expand</span>';
+    }
     if (!entry) {
       await drawing.load(null); // no bones of the previous clip
       video.removeAttribute('src');
@@ -112,7 +144,7 @@ export function createVideoOverlay(pane) {
       return false;
     }
     video.src = BASE + entry.video;
-    await drawing.load(BASE + entry.pose);
+    await drawing.load(entry.pose ? BASE + entry.pose : null);
     return true;
   }
 
@@ -121,14 +153,18 @@ export function createVideoOverlay(pane) {
    * more than a few frames, so playback stays smooth. Call every animation frame.
    */
   function sync(time, playing, speed) {
-    if (!drawing.ready()) return;
+    if (!activeEntry) return;
     const duration = video.duration || drawing.duration();
     const target = duration ? time % duration : time;
-    if (Math.abs(video.currentTime - target) > 0.15) video.currentTime = target;
+    if (Number.isFinite(target) && Math.abs(video.currentTime - target) > 0.18) {
+      try {
+        video.currentTime = target;
+      } catch {}
+    }
     video.playbackRate = speed;
     if (playing && video.paused) video.play().catch(() => {});
     if (!playing && !video.paused) video.pause();
-    drawing.draw(video.currentTime);
+    if (drawing.ready()) drawing.draw(video.currentTime);
   }
 
   return {
@@ -136,7 +172,7 @@ export function createVideoOverlay(pane) {
     sync,
     dispose() {
       video.pause();
-      video.remove();
+      pipWrap.remove();
       canvas.remove();
     },
   };

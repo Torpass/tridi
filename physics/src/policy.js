@@ -16,7 +16,7 @@ const HOME_KEY = 'home';
 const ANG_VEL_SCALE = 0.25;
 const JOINT_VEL_SCALE = 0.05;
 const ACTION_SCALE = 0.25; // one unit of action is 0.25 rad from the standing pose
-const SUPPORTED_ROBOTS = new Set(['unitree_g1', 'unitree_h1', 'luigi_lab3']);
+const SUPPORTED_ROBOTS = new Set(['unitree_g1', 'unitree_h1', 'luigi_lab3', 'luigi_lab4', 'factory_cell']);
 const standObsDim = (nu, senseVelocity = false) => 3 + 3 + nu + nu + nu + (senseVelocity ? 3 : 0);
 // Imitation adds the reference 20 ms ahead (joints, pelvis velocity, pelvis height), for each
 // look-ahead instant of policy.json its joints and pelvis position, and optionally (sense_velocity)
@@ -65,8 +65,9 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
   const minRefZ = mimic && motion.qpos?.length ? Math.min(...motion.qpos.map((r) => r[2])) : FALL_HEIGHT;
   // Deep squats and sitting down lower the pelvis to 0.32-0.44 m while upright, below the 0.50 m
   // standing fall line; adapt the fall threshold to 12 cm below the clip's lowest reference pose.
-  const isWheeled = meta.robot === 'luigi_lab3';
-  const fallHeight = isWheeled ? 0.02 : mimic ? Math.min(FALL_HEIGHT, minRefZ - 0.12) : FALL_HEIGHT;
+  const isWheeled = meta.robot === 'luigi_lab3' || meta.robot === 'luigi_lab4';
+  const isIndustrial = meta.robot === 'factory_cell';
+  const fallHeight = isWheeled || isIndustrial ? 0.02 : mimic ? Math.min(FALL_HEIGHT, minRefZ - 0.12) : FALL_HEIGHT;
   const session = await ort.InferenceSession.create(onnx, { executionProviders: ['wasm'] });
   const [input] = session.inputNames;
   const [output] = session.outputNames;
@@ -150,10 +151,13 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
     const ry = qpos[1];
     const rz = qpos[2];
     const [qw, qx, qy, qz] = [qpos[3], qpos[4], qpos[5], qpos[6]];
-    const yaw = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
-    // Front sensor mount (HC-SR04 + APDS-9960) sits 0.155 m ahead of pelvis origin
-    const sx = rx + 0.155 * Math.cos(yaw);
-    const sy = ry + 0.155 * Math.sin(yaw);
+    const bodyYaw = Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+    // On luigi_lab4, qpos[9] is the SG90 neck servo angle (-pi/2..+pi/2 rad) rotating the HC-SR04 turret
+    const neckAngle = m.nq >= 10 ? qpos[9] : 0;
+    const yaw = bodyYaw + neckAngle;
+    const mountOffset = m.nq >= 10 ? 0.180 : 0.155;
+    const sx = rx + mountOffset * Math.cos(bodyYaw);
+    const sy = ry + mountOffset * Math.sin(bodyYaw);
     const sz = rz + 0.015;
     const T = mujoco.mjtGeom;
 
@@ -282,6 +286,326 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
       }
       if (down && qpos[2] < Math.max(fallHeight + 0.1, RECOVER_HEIGHT)) return;
       down = false;
+      if (isIndustrial) {
+        if (sim._serialCmd || sim._usbLocked) {
+          const active = sim._serialCmd && (!sim._serialCmd.until || performance.now() < sim._serialCmd.until);
+          if (active && sim._serialCmd.ctrl) {
+            data.ctrl[0] = sim._serialCmd.ctrl[0] ?? data.ctrl[0];
+            data.ctrl[1] = sim._serialCmd.ctrl[1] ?? data.ctrl[1];
+            data.ctrl[2] = sim._serialCmd.ctrl[2] ?? data.ctrl[2];
+          }
+          previous.set(data.ctrl);
+          return;
+        }
+        const simTime = data.time;
+        // Bolt the industrial conveyor frame (pelvis) to the factory floor so it never rocks or slips.
+        data.qpos[0] = 0;
+        data.qpos[1] = 0;
+        data.qpos[2] = 0.35;
+        data.qpos[3] = 1;
+        data.qpos[4] = 0;
+        data.qpos[5] = 0;
+        data.qpos[6] = 0;
+        data.qvel.fill(0, 0, 6);
+
+        // Multi-station PackML packaging line:
+        // 1. Hopper/Weigher (PE-01) -> 2. Blue Sealer Press (PRESS-01, PE-02) -> 3. Exit Inspection (PE-03)
+        // -> 4A (Good box): Slides down ramp to stack on Pallet (PALLET-01, 1..6 stacked boxes)
+        // -> 4B (Badly sealed box in Fixed-Timer Slip Mode): Red Pusher (PUSHER-01) pushes box in +Y into Side Reject Tray!
+        const formatId = sim._factoryFormat || '500g';
+        const FORMAT_RECIPES = {
+          '250g': { cycleS: 4.8, vfdHz: 58.5, sealerTarget: 0.107, pusherTarget: 0.36, dwellMs: 420, labelEs: '250 g · 58,5 Hz', labelEn: '250 g · 58.5 Hz' },
+          '500g': { cycleS: 5.4, vfdHz: 50.0, sealerTarget: 0.095, pusherTarget: 0.36, dwellMs: 550, labelEs: '500 g · 50,0 Hz', labelEn: '500 g · 50.0 Hz' },
+          '1000g': { cycleS: 6.0, vfdHz: 41.5, sealerTarget: 0.082, pusherTarget: 0.36, dwellMs: 680, labelEs: '1 kg · 41,5 Hz', labelEn: '1 kg · 41.5 Hz' },
+        };
+        const recipe = FORMAT_RECIPES[formatId] || FORMAT_RECIPES['500g'];
+        const fixedPlcMode = Boolean(sim._factoryFixedTimerMode);
+        const cycleIdx = Math.floor(simTime / recipe.cycleS);
+        const clamp01 = (v) => Math.max(0, Math.min(1, v));
+        const sCurve = (u) => {
+          const c = clamp01(u);
+          return c * c * (3 - 2 * c);
+        };
+        const lerp = (a, b, u) => a + (b - a) * sCurve(u);
+
+        if (sim._lastFactoryCycleIdx !== cycleIdx) {
+          if (sim._lastFactoryCycleIdx !== undefined) {
+            if (fixedPlcMode) {
+              sim._factoryCrushedCount = (sim._factoryCrushedCount || 0) + 1;
+            } else {
+              sim._factoryCycles = (sim._factoryCycles || 0) + 1;
+            }
+          }
+          sim._lastFactoryCycleIdx = cycleIdx;
+        }
+
+        const uCycle = (simTime % recipe.cycleS) / recipe.cycleS;
+        const completedCycles = sim._factoryCycles || 0;
+        const crushedCount = sim._factoryCrushedCount || 0;
+        const PALLET_SLOTS = [
+          { x: 1.21, y: -0.085, z: -0.228 },
+          { x: 1.21, y: 0.085, z: -0.228 },
+          { x: 1.38, y: -0.085, z: -0.228 },
+          { x: 1.38, y: 0.085, z: -0.228 },
+          { x: 1.21, y: -0.085, z: -0.126 },
+          { x: 1.21, y: 0.085, z: -0.126 },
+        ];
+        const targetSlotIdx = completedCycles % 6;
+        const targetSlot = PALLET_SLOTS[targetSlotIdx];
+
+        let feedTarget = -0.17; // boxX = -0.45 + feedTarget (-0.17 -> boxX = -0.62 m at Hopper)
+        let pusherTarget = 0.0;
+        let sealerTarget = 0.0;
+        let boxOffsetY = 0.0;
+        let boxOffsetZ = 0.0;
+        let boxPitchRad = 0.0;
+        let boxSealed = false;
+        let sealQuality = 'none'; // 'none' | 'ok' | 'bad'
+        let stage = 0;
+        let crushed = false;
+
+        if (fixedPlcMode) {
+          // Fixed-Timer PLC + 28% Belt Slip:
+          // Step 0 (0.00..0.28): Belt slips, so box only reaches feed = 0.44 m (boxX = -0.01 m, 13 cm behind Blue Press center!).
+          // Step 1 (0.28..0.56): Blind timer lowers Blue Press anyway -> hits front edge of lagging box, leaving a crooked bad seal!
+          // Step 2 (0.56..0.75): Poorly sealed box advances to x = +0.62 m (feed = 1.07 m), stopping in front of Red Reject Pusher.
+          // Step 3 (0.75..1.00): Red Pusher extends in +Y (0 -> 0.36 m) and pushes the defective box in +Y into the Side Reject Tray!
+          if (uCycle < 0.28) {
+            feedTarget = lerp(-0.17, 0.44, uCycle / 0.28);
+            stage = 0;
+          } else if (uCycle < 0.56) {
+            feedTarget = 0.44;
+            if (uCycle < 0.37) {
+              sealerTarget = lerp(0.0, recipe.sealerTarget, (uCycle - 0.28) / 0.09);
+            } else if (uCycle < 0.47) {
+              sealerTarget = recipe.sealerTarget;
+              boxSealed = true;
+              sealQuality = 'bad';
+            } else {
+              sealerTarget = lerp(recipe.sealerTarget, 0.0, (uCycle - 0.47) / 0.09);
+              boxSealed = true;
+              sealQuality = 'bad';
+            }
+            crushed = uCycle >= 0.35;
+            stage = 4;
+          } else if (uCycle < 0.75) {
+            feedTarget = lerp(0.44, 1.07, (uCycle - 0.56) / 0.19);
+            boxSealed = true;
+            sealQuality = 'bad';
+            crushed = true;
+            stage = 2;
+          } else {
+            feedTarget = 1.07;
+            boxSealed = true;
+            sealQuality = 'bad';
+            crushed = true;
+            stage = 3;
+            if (uCycle < 0.90) {
+              const pushU = (uCycle - 0.75) / 0.15;
+              pusherTarget = lerp(0.0, recipe.pusherTarget, pushU);
+              boxOffsetY = lerp(0.0, 0.36, pushU);
+              boxOffsetZ = pushU > 0.65 ? lerp(0.0, -0.055, (pushU - 0.65) / 0.35) : 0.0;
+            } else {
+              pusherTarget = lerp(recipe.pusherTarget, 0.0, (uCycle - 0.90) / 0.10);
+              boxOffsetY = 0.36;
+              boxOffsetZ = -0.055;
+            }
+          }
+        } else {
+          // Closed-Loop Tridi Twin (Optical Sensor Synchronized):
+          // Step 0 (0.00..0.28): Box glides from Hopper (-0.17) across Weigher (PE-01) and stops centered under Blue Press (feed = 0.57, boxX = +0.12 m).
+          // Step 1 (0.28..0.56): PE-02 confirms box centered -> Blue Press kisses box top (no squashing!), stamps centered white seal, and retracts.
+          // Step 2 (0.56..0.78): Sealed box glides to end of black belt (feed = 1.29, boxX = +0.84 m); Red Pusher stays at 0 mm because seal is OK.
+          // Step 3 (0.78..1.00): Box slides smoothly down the inclined ramp and lands directly in its target slot on the Euro-Pallet (PALLET-01)!
+          if (uCycle < 0.28) {
+            feedTarget = lerp(-0.17, 0.57, uCycle / 0.28);
+            stage = 0;
+          } else if (uCycle < 0.56) {
+            feedTarget = 0.57;
+            stage = 1;
+            if (uCycle < 0.37) {
+              sealerTarget = lerp(0.0, recipe.sealerTarget, (uCycle - 0.28) / 0.09);
+            } else if (uCycle < 0.47) {
+              sealerTarget = recipe.sealerTarget;
+              boxSealed = true;
+              sealQuality = 'ok';
+            } else {
+              sealerTarget = lerp(recipe.sealerTarget, 0.0, (uCycle - 0.47) / 0.09);
+              boxSealed = true;
+              sealQuality = 'ok';
+            }
+          } else if (uCycle < 0.78) {
+            feedTarget = lerp(0.57, 1.29, (uCycle - 0.56) / 0.22);
+            boxSealed = true;
+            sealQuality = 'ok';
+            stage = 2;
+          } else {
+            const rampU = (uCycle - 0.78) / 0.22;
+            const slotFeed = targetSlot.x - -0.45; // feed coordinate so boxX === targetSlot.x
+            const slotOffsetZ = targetSlot.z - 0.095; // z offset relative to carrier (0.095)
+            if (rampU < 0.65) {
+              const u1 = rampU / 0.65;
+              feedTarget = lerp(1.29, 1.56, u1);
+              boxOffsetY = lerp(0.0, targetSlot.y, u1 * 0.5);
+              boxOffsetZ = lerp(0.0, -0.29, u1);
+              boxPitchRad = Math.sin(u1 * Math.PI) * 0.28;
+            } else {
+              const u2 = (rampU - 0.65) / 0.35;
+              feedTarget = lerp(1.56, slotFeed, u2);
+              boxOffsetY = lerp(targetSlot.y * 0.5, targetSlot.y, u2);
+              boxOffsetZ = lerp(-0.29, slotOffsetZ, u2);
+              boxPitchRad = 0.0;
+            }
+            boxSealed = true;
+            sealQuality = 'ok';
+            stage = 3;
+          }
+        }
+
+        // Apply smooth kinematic/servo state with zero spring bounce
+        data.qpos[7] = feedTarget;
+        data.qpos[8] = pusherTarget;
+        data.qpos[9] = sealerTarget;
+        data.qvel[6] = 0;
+        data.qvel[7] = 0;
+        data.qvel[8] = 0;
+        data.ctrl[0] = feedTarget;
+        data.ctrl[1] = pusherTarget;
+        data.ctrl[2] = sealerTarget;
+
+        // Update 3D geom offsets inside conveyor_carrier_link (ramp descent, lateral reject push, seal appearance, and pallet stack)
+        const { mujoco, model: m } = sim;
+        if (!sim._factoryGeomIds) {
+          const objGeom = mujoco.mjtObj.mjOBJ_GEOM.value;
+          sim._factoryGeomIds = {
+            box: mujoco.mj_name2id(m, objGeom, 'package_box'),
+            label: mujoco.mj_name2id(m, objGeom, 'package_label'),
+            palletBoxes: [1, 2, 3, 4, 5, 6].map((n) => mujoco.mj_name2id(m, objGeom, `pallet_box_${n}`)),
+          };
+        }
+        const gIds = sim._factoryGeomIds;
+        if (gIds.box >= 0) {
+          m.geom_pos[3 * gIds.box + 0] = 0.0;
+          m.geom_pos[3 * gIds.box + 1] = boxOffsetY;
+          m.geom_pos[3 * gIds.box + 2] = boxOffsetZ;
+          const halfP = 0.5 * boxPitchRad;
+          m.geom_quat[4 * gIds.box + 0] = Math.cos(halfP);
+          m.geom_quat[4 * gIds.box + 1] = 0.0;
+          m.geom_quat[4 * gIds.box + 2] = Math.sin(halfP);
+          m.geom_quat[4 * gIds.box + 3] = 0.0;
+        }
+        if (gIds.label >= 0) {
+          if (!boxSealed) {
+            // Hide seal inside box before Station 2 (Blue Sealer Press) stamps it
+            m.geom_pos[3 * gIds.label + 0] = 0.0;
+            m.geom_pos[3 * gIds.label + 1] = boxOffsetY;
+            m.geom_pos[3 * gIds.label + 2] = boxOffsetZ;
+          } else if (sealQuality === 'bad') {
+            // Misaligned seal stamped on front-right edge when box arrived late under fixed timer
+            m.geom_pos[3 * gIds.label + 0] = 0.038;
+            m.geom_pos[3 * gIds.label + 1] = boxOffsetY + 0.016;
+            m.geom_pos[3 * gIds.label + 2] = boxOffsetZ + 0.053;
+          } else {
+            // Centered seal stamped cleanly by Blue Press
+            m.geom_pos[3 * gIds.label + 0] = 0.0;
+            m.geom_pos[3 * gIds.label + 1] = boxOffsetY;
+            m.geom_pos[3 * gIds.label + 2] = boxOffsetZ + 0.053;
+          }
+          const halfP = 0.5 * boxPitchRad;
+          m.geom_quat[4 * gIds.label + 0] = Math.cos(halfP);
+          m.geom_quat[4 * gIds.label + 1] = 0.0;
+          m.geom_quat[4 * gIds.label + 2] = Math.sin(halfP);
+          m.geom_quat[4 * gIds.label + 3] = 0.0;
+        }
+        // Show stacked boxes on the pallet (0..6 boxes stacking up one by one as each good cycle finishes)
+        const visibleStackCount = completedCycles % 6;
+        for (let i = 0; i < 6; i++) {
+          const gid = gIds.palletBoxes[i];
+          if (gid >= 0) {
+            const slot = PALLET_SLOTS[i];
+            m.geom_pos[3 * gid + 0] = slot.x;
+            m.geom_pos[3 * gid + 1] = slot.y;
+            m.geom_pos[3 * gid + 2] = i < visibleStackCount ? slot.z : -10.0; // hide below ground until stacked
+          }
+        }
+
+        const boxX = -0.45 + feedTarget;
+        const sensorEntry = Math.abs(boxX - -0.38) < 0.11;
+        const sensorSealer = Math.abs(boxX - 0.12) < 0.065;
+        const sensorExit = Math.abs(boxX - 0.46) < 0.11;
+        const feedMm = Math.round((feedTarget + 0.17) * 1000);
+        const pusherMm = Math.round(pusherTarget * 1000);
+        const sealerMm = Math.round(sealerTarget * 1000);
+        const stackedBoxes = visibleStackCount + ( (!fixedPlcMode && stage === 3) ? 1 : 0 );
+
+        const stageNamesEs = [
+          `1/4 · Pesaje y Avance (${recipe.labelEs})`,
+          `2/4 · Prensa Azul Sella Caja (${recipe.dwellMs} ms)`,
+          `3/4 · Inspección Salida PE-03`,
+          fixedPlcMode ? `4/4 · Pistón Rojo Expulsa Caja Mal Sellada` : `4/4 · Rampa y Apilado en Palet (${stackedBoxes}/6)`,
+          `⚠️ FALLA · Caja Llegó Tarde y Quedó Mal Sellada`,
+        ];
+        const stageNamesEn = [
+          `1/4 · Weighing & Infeed (${recipe.labelEn})`,
+          `2/4 · Blue Press Seals Box (${recipe.dwellMs} ms)`,
+          `3/4 · Exit Inspection PE-03`,
+          fixedPlcMode ? `4/4 · Red Pusher Rejects Mis-Sealed Box` : `4/4 · Ramp & Stacking on Pallet (${stackedBoxes}/6)`,
+          `⚠️ FAULT · Box Arrived Late & Mis-Sealed`,
+        ];
+        const stepExplainEs = [
+          `Paso 1/4: Sale una caja nueva de la Tolva (HOPPER-01), pasa por la báscula (PE-01) y avanza a velocidad constante hacia el centro.`,
+          `Paso 2/4: La caja se detiene centrada en PE-02; la Prensa Azul (PRESS-01) baja justo hasta el tope de la caja y le estampa el sello blanco.`,
+          fixedPlcMode
+            ? `Paso 3/4: El sensor de salida PE-03 detecta que la caja tiene el sello descentrado/defectuoso y prepara el Pistón Rojo de rechazo.`
+            : `Paso 3/4: La Prensa Azul sube y la caja bien sellada avanza hacia el final de la banda negra (el Pistón Rojo no se activa porque la caja está OK).`,
+          fixedPlcMode
+            ? `Paso 4/4: El Pistón Rojo (PUSHER-01) empuja la caja mal sellada hacia adelante fuera de la banda hacia la Bandeja de Rechazo (Merma).`
+            : `Paso 4/4: La caja buena baja deslizándose por la rampa inclinada y se apila en el Palet (PALLET-01: ${stackedBoxes}/6 cajas apiladas).`,
+          `⚠️ ¡FALLA DE SINCRONIZACIÓN! La banda patinó 28 %, la caja llegó tarde (PE-02=0) y la Prensa Azul bajó por reloj golpeando el borde delantero (queda mal sellada).`,
+        ];
+        const stepExplainEn = [
+          `Step 1/4: A new box enters from the Hopper (HOPPER-01), crosses the scale (PE-01), and glides at constant speed toward the center.`,
+          `Step 2/4: Box stops centered at PE-02; the Blue Press (PRESS-01) lowers flush onto the box top and stamps the white seal.`,
+          fixedPlcMode
+            ? `Step 3/4: Exit sensor PE-03 detects the crooked/defective seal on the box and arms the Red Reject Pusher.`
+            : `Step 3/4: Blue Press retracts and the properly sealed box glides to the end of the black belt (Red Pusher stays idle because the box is OK).`,
+          fixedPlcMode
+            ? `Step 4/4: The Red Pusher (PUSHER-01) pushes the poorly sealed box forward off the belt into the Side Reject Tray (Waste).`
+            : `Step 4/4: The good box slides down the inclined chute and stacks onto the Pallet (PALLET-01: ${stackedBoxes}/6 stacked boxes).`,
+          `⚠️ TIMING FAULT! Belt slipped 28%, the box arrived late (PE-02=0), and the Blue Press came down on a fixed timer hitting the front edge (mis-sealed box).`,
+        ];
+        sim.factoryReadout = {
+          feedMm: Math.max(0, feedMm),
+          conveyorMm: Math.max(0, feedMm),
+          pusherMm,
+          sealerMm,
+          vfdHz: fixedPlcMode ? (recipe.vfdHz * 0.72).toFixed(1) : recipe.vfdHz.toFixed(1),
+          formatId,
+          recipe,
+          sensorEntry,
+          sensorSealer,
+          sensorExit,
+          stage,
+          crushed,
+          crushedBox: crushed,
+          boxOffsetY,
+          boxOffsetZ,
+          boxPitchRad,
+          boxSealed,
+          sealQuality,
+          stackedBoxes,
+          completedCycles,
+          crushedCount,
+          modeLabel: stageNamesEs[stage] || stageNamesEs[0],
+          modeLabelEs: stageNamesEs[stage] || stageNamesEs[0],
+          modeLabelEn: stageNamesEn[stage] || stageNamesEn[0],
+          stepExplainEs: stepExplainEs[stage] || stepExplainEs[0],
+          stepExplainEn: stepExplainEn[stage] || stepExplainEn[0],
+          fixedPlcMode,
+        };
+        previous.set(data.ctrl);
+        return;
+      }
       if (isWheeled) {
         const sensor = scanWheeledSensors(sim);
         if (sim._serialCmd || sim._usbLocked) {
@@ -317,18 +641,21 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
         if (dodge.stage === 1) {
           data.ctrl[0] = -20;
           data.ctrl[1] = -20;
+          if (nu >= 3) data.ctrl[2] = -1.25; // sweep SG90 neck right (-72 deg) to scan clearance
           previous.set(data.ctrl);
           return;
         }
         if (dodge.stage === 2) {
           data.ctrl[0] = -14.5;
           data.ctrl[1] = -14.5;
+          if (nu >= 3) data.ctrl[2] = 1.25; // sweep SG90 neck left (+72 deg) while reversing
           previous.set(data.ctrl);
           return;
         }
         if (dodge.stage === 3) {
           data.ctrl[0] = dodge.turnDir > 0 ? -14.5 : 14.5;
           data.ctrl[1] = dodge.turnDir > 0 ? 14.5 : -14.5;
+          if (nu >= 3) data.ctrl[2] = 0; // return SG90 neck to 0 rad (90 deg front)
           previous.set(data.ctrl);
           return;
         }
@@ -338,6 +665,10 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
         const corridorBias = Math.max(-3.5, Math.min(3.5, (sensor.leftClearM - sensor.rightClearM) * 1.6));
         data.ctrl[0] = Math.max(-20, Math.min(20, 15.5 + (ctrl[0] || 0) * 0.25 - corridorBias));
         data.ctrl[1] = Math.max(-20, Math.min(20, 15.5 + (ctrl[1] || 0) * 0.25 + corridorBias));
+        if (nu >= 3) {
+          // Active SG90 neck radar oscillation while moving (no blocking delay(350))
+          data.ctrl[2] = Math.max(-1.57, Math.min(1.57, 0.65 * Math.sin(simTime * 3.0) + (ctrl[2] || 0) * 0.15));
+        }
         previous.set(data.ctrl);
         return;
       }
@@ -347,16 +678,23 @@ export async function createPolicy(ort, sim, onnx, meta, { motion } = {}) {
       if (mimic && sim._inAdvance && !sim.pushUntil) {
         // Blend the clean reference joints with the ONNX reflex residual: 6% residual when upright
         // so full-amplitude human motion is preserved without 50 Hz motor chatter, while keeping
-        // the waist (joints 12..14 on G1) upright and free of out-of-distribution forward lean.
+        // the waist (joints 12..14 on G1) upright and velocity-damped against forward lean.
         const next = reference.sample(t + CONTROL_DT);
         const reflex = Math.min(0.22, Math.max(0.05, (1 - upright - 0.04) / 0.25));
         for (let i = 0; i < nu; i++) {
           const refJ = next.q[7 + i];
-          const w = i >= 12 && i <= 14 ? 0.03 : reflex;
-          // Counteract gravity droop on G1 waist_pitch_joint (index 14) so the torso stays vertical
-          const uprightBias = i === 14 && nu === 29 ? -0.06 : 0;
-          const target = refJ + uprightBias + w * (ctrl[i] - refJ);
-          data.ctrl[i] = 0.55 * target + 0.45 * data.ctrl[i];
+          const jv = data.qvel[6 + i] || 0;
+          let target;
+          if (nu === 29 && i === 12) {
+            target = 0.85 * refJ - 0.08 * jv;
+          } else if (nu === 29 && i === 13) {
+            target = 0.45 * refJ - 0.12 * jv;
+          } else if (nu === 29 && i === 14) {
+            target = Math.min(0.08, 0.55 * refJ) - 0.02 - 0.12 * jv;
+          } else {
+            target = (1 - reflex) * refJ + reflex * ctrl[i];
+          }
+          data.ctrl[i] = 0.82 * target + 0.18 * data.ctrl[i];
         }
       } else {
         data.ctrl.set(ctrl);

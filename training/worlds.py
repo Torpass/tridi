@@ -131,9 +131,9 @@ class InWorld:
 class StandInWorld(InWorld, G1Env):
     def __init__(self, world: dict, seed: int, redraw: bool = True, push_n: tuple[float, float] = PUSH_N,
                  push_every: tuple[float, float] = PUSH_EVERY_S, stance: Stance | None = None,
-                 wind_max: float | None = None, sense_velocity: bool = False):
+                 wind_max: float | None = None, sense_velocity: bool = False, fault_prob: float = 0.0):
         G1Env.__init__(self, seed=seed, push=True, push_n=push_n, push_every=push_every, stance=stance,
-                       sense_velocity=sense_velocity)
+                       sense_velocity=sense_velocity, fault_prob=fault_prob)
         self.setup_world(world, redraw, wind_max)
 
 
@@ -141,9 +141,11 @@ class MimicInWorld(InWorld, MimicEnv):
     def __init__(self, world: dict, seed: int, motion: str = DEFAULT_MOTION, redraw: bool = True,
                  push_n: tuple[float, float] = PUSH_N, push_every: tuple[float, float] = PUSH_EVERY_S,
                  wind_max: float | None = None, push: bool = True, follow: bool = False,
-                 recover: bool | float = False, sense_velocity: bool = False):
-        MimicEnv.__init__(self, seed=seed, clips=(motion,), push=push, nudge=push, follow=follow,
-                          recover=recover, sense_velocity=sense_velocity)
+                 recover: bool | float = False, sense_velocity: bool = False,
+                 fault_prob: float = 0.0, sudden_stop_prob: float = 0.0):
+        MimicEnv.__init__(self, seed=seed, clips=motion, push=push, nudge=push, follow=follow,
+                          recover=recover, sense_velocity=sense_velocity, fault_prob=fault_prob,
+                          sudden_stop_prob=sudden_stop_prob)
         self.push_n = push_n
         self.push_every = push_every
         self.setup_world(world, redraw, wind_max)

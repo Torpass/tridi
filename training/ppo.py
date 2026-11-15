@@ -214,7 +214,7 @@ def train(total_steps: int, run: str, device: str, init: Path | None, push_n: tu
           guard_on: bool = True, plateau_stop: bool = True, note: str = "", argv: str = "", shared: str = "background",
           register_run: bool = True, robust: bool = False, adaptive_lr: bool = True, follow: bool = False,
           metric: str = "follow", goal: float = 0.9, budget_steps: float = 100_000_000, recover: bool | float = False,
-          sense_velocity: bool = False) -> None:
+          sense_velocity: bool = False, fault_prob: float = 0.0, sudden_stop_prob: float = 0.0) -> None:
     run_dir = RUNS / run
     run_dir.mkdir(parents=True, exist_ok=True)
     torch.manual_seed(seed)
@@ -236,7 +236,8 @@ def train(total_steps: int, run: str, device: str, init: Path | None, push_n: tu
     # Mimic pushes and nudges only with --robust: older mimic runs trained without them.
     envs = VecEnv(NUM_ENVS, WORKERS, seed=seed, push=robust if task == "mimic" else True, push_n=push_n, task=task,
                   motion=motion, push_every=push_every, stance=stance, worlds=worlds, wind_max=wind_max,
-                  follow=follow, recover=recover, sense_velocity=sense_velocity)
+                  follow=follow, recover=recover, sense_velocity=sense_velocity,
+                  fault_prob=fault_prob, sudden_stop_prob=sudden_stop_prob)
     obs = envs.reset()
     meta = {"task": task, "motion": motion} if task == "mimic" else {"task": task}
     meta["worlds"] = list(worlds) or ["plano"]
@@ -623,6 +624,10 @@ def main() -> None:
     p.add_argument("--no-plateau-stop", action="store_true", help="keep training even if plateau.py says it stopped learning")
     p.add_argument("--robust", action="store_true",
                    help="mimic: nudged starts and random pushes (--push-min/--push-max), so the motion survives both")
+    p.add_argument("--fault-prob", type=float, default=0.0,
+                   help="probability per episode of degrading a random leg motor's gain/torque to 35-75%% (J-2)")
+    p.add_argument("--sudden-stop-prob", type=float, default=0.0,
+                   help="mimic: probability per episode of an emergency obstacle stop window of 1-2 s (J-2)")
     p.add_argument("--note", default="", help="what this run changes and why (goes to training/experiments.csv)")
     args = p.parse_args()
     task = "mimic" if args.task == "walk" else args.task
@@ -639,7 +644,7 @@ def main() -> None:
           tuple(w for w in args.worlds.split(",") if w), args.wind_max, args.resume, not args.no_guard,
           not args.no_plateau_stop, args.note, " ".join(sys.argv[1:]), args.shared, robust=args.robust, adaptive_lr=not args.fixed_lr, follow=args.follow,
           metric=args.metric, goal=args.goal, budget_steps=args.budget_steps, recover=args.recover,
-          sense_velocity=args.sense_velocity)
+          sense_velocity=args.sense_velocity, fault_prob=args.fault_prob, sudden_stop_prob=args.sudden_stop_prob)
 
 
 if __name__ == "__main__":

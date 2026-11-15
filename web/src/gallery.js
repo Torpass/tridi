@@ -30,13 +30,13 @@ export function mountGallery(root, stage, initialClip, onSelect, { hide = [] } =
   if (userClips.length > 0) appendSectionHeader('groupUser');
 
   items.forEach((item, idx) => {
-    if (idx === userClips.length) appendSectionHeader('groupPreloaded');
+    if (userClips.length > 0 && idx === userClips.length) appendSectionHeader('groupPreloaded');
     const isUser = Boolean(item.data);
     const li = document.createElement('li');
     const button = document.createElement('button');
     button.className = `card ${isUser ? 'card-user' : 'card-preloaded'}`;
-    const badge = T(isUser ? 'badgeTrainable' : 'badgeTrained');
-    button.innerHTML = `<span class="card-top"><strong></strong><span class="card-badge ${isUser ? 'trainable' : 'trained'}">${badge}</span></span><span class="meta">…</span><span class="credit"></span>`;
+    const badgeHtml = isUser ? `<span class="card-badge trainable">${T('badgeTrainable')}</span>` : '';
+    button.innerHTML = `<span class="card-top"><strong></strong>${badgeHtml}</span><span class="meta">…</span><span class="credit"></span>`;
     const names = clipName(item);
     button.querySelector('strong').innerHTML = spans(names.title);
     button.querySelector('.credit').innerHTML = spans(names.credit);

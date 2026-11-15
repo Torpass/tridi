@@ -1,0 +1,32 @@
+<mujoco model="component_plc_s7_1200">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.075">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <body name="board_turntable" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.38" diaginertia="0.001 0.001 0.001"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.08" armature="0.004"/>
+        <!-- DIN-rail Industrial PLC Housing (24V DC DI/DO + PROFINET RJ45) -->
+        <geom name="din_rail" type="box" pos="-0.038 0 0" size="0.005 0.095 0.018" group="2" rgba="0.72 0.75 0.80 1"/>
+        <geom name="plc_body" type="box" pos="0 0 0" size="0.036 0.065 0.052" group="2" rgba="0.22 0.27 0.32 1"/>
+        <geom name="plc_faceplate" type="box" pos="0.034 0 0" size="0.005 0.062 0.046" group="2" rgba="0.28 0.34 0.40 1"/>
+        <geom name="plc_teal_strip" type="box" pos="0.0395 0 0.018" size="0.001 0.060 0.006" group="2" rgba="0.00 0.62 0.65 1"/>
+        <geom name="led_run" type="sphere" pos="0.040 0.042 0.004" size="0.0035" group="2" rgba="0.18 0.92 0.38 1"/>
+        <geom name="led_diag" type="sphere" pos="0.040 0.032 0.004" size="0.0035" group="2" rgba="0.98 0.75 0.12 1"/>
+        <geom name="rj45_port" type="box" pos="0.018 -0.032 -0.048" size="0.012 0.012 0.010" group="2" rgba="0.78 0.80 0.84 1"/>
+        <geom name="terminal_top" type="box" pos="0.012 0 0.055" size="0.015 0.055 0.006" group="2" rgba="0.14 0.16 0.18 1"/>
+        <geom name="terminal_bot" type="box" pos="0.012 0 -0.055" size="0.015 0.055 0.006" group="2" rgba="0.14 0.16 0.18 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="demo_actuator" joint="demo_joint" kp="3.5" ctrlrange="-3.14 3.14" ctrllimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>

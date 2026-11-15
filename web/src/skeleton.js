@@ -131,7 +131,9 @@ export class SkeletonView {
     this.body.add(this.bones, this.joints, this.handBones, this.handJoints, this.head, this.neck);
 
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.05, 100);
-    this.camera.position.set(2.6, 1.5, 2.6);
+    // Distance ~3.14 m so the 1.70 m human skeleton fills the exact same vertical frame proportion (~73%)
+    // as the 1.32 m G1 robot at ~2.49 m in Viewer.
+    this.camera.position.set(2.55, 1.45, 1.75);
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.target.set(0, 0.9, 0);
     this.controls.enableDamping = true;

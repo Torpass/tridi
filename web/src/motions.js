@@ -6,13 +6,24 @@ const URLS = {
   ...import.meta.glob('../../training/references/*.json', { query: '?url', import: 'default', eager: true }),
 };
 const urlById = new Map(Object.entries(URLS).map(([path, url]) => [path.split('/').pop().replace(/\.json$/, ''), url]));
+const motionCache = new Map();
 
 /** @returns the RobotMotion of a clip, or null if there is none saved for it */
 export async function savedMotion(clipId) {
   const url = urlById.get(clipId) ?? urlById.get(`${clipId}-balanced`);
   if (!url) return null;
-  const response = await fetch(url);
-  return response.ok ? response.json() : null;
+  if (!motionCache.has(url)) {
+    motionCache.set(
+      url,
+      fetch(url)
+        .then((response) => (response.ok ? response.json() : null))
+        .catch((err) => {
+          motionCache.delete(url);
+          throw err;
+        }),
+    );
+  }
+  return motionCache.get(url);
 }
 
 /** true if the clip has a saved RobotMotion (it plays at once, with no retargeting). */

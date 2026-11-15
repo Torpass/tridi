@@ -3,42 +3,223 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tridi · física</title>
+    <title>Tridi · Catálogo 3D de Hardware, Assembler &amp; Simulador (P-1 a P-4)</title>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
-    <header>
-      <div>
-        <h1>Unitree G1 en MuJoCo</h1>
-        <p>La física corre en tu navegador. Con la cámara, el robot copia tu movimiento; sin ella, sostiene la pose con sus motores y todavía no tiene política para equilibrarse.</p>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <div>
+          <h1>Tridi Hardware Studio</h1>
+          <p>P-1 Catálogo 3D Sincronizado · P-3 Assembler CAD+Código · P-2/P-4 Simulación MuJoCo</p>
+        </div>
       </div>
-      <nav>
-        <button id="camera" disabled>Cámara</button>
-        <button id="clip" disabled>Caminata</button>
-        <select id="policy" disabled aria-label="Política">
-          <option value="">Sin política (motores rígidos)</option>
-          <option value="g1-stand-step-0">Política sin entrenar (paso 0)</option>
-          <option value="g1-stand-step-3000000">3 M de pasos</option>
-          <option value="g1-stand-step-10000000">10 M de pasos</option>
-          <option value="g1-stand-step-20000768">20 M de pasos</option>
-          <option value="g1-stand">40 M de pasos (final)</option>
-        </select>
-        <button id="push" disabled>Empujar</button>
-        <button id="reset" disabled>Reiniciar</button>
-      </nav>
+
+      <div class="mode-tabs" role="tablist">
+        <button id="tab-catalog" class="mode-tab active" data-tab="catalog" type="button">
+          1. Catálogo 3D de Componentes (P-1)
+        </button>
+        <button id="tab-assembler" class="mode-tab" data-tab="assembler" type="button">
+          2. Ensamblador Paso a Paso (P-3)
+        </button>
+        <button id="tab-arena" class="mode-tab" data-tab="arena" type="button">
+          3. Simulador en Arena (P-2 / P-4)
+        </button>
+      </div>
     </header>
-    <main id="stage">
-      <canvas id="view"></canvas>
-      <div id="camera-box" hidden>
-        <video id="camera-video" playsinline muted></video>
-        <canvas id="camera-overlay"></canvas>
-      </div>
-      <div id="loading">
-        <div class="track"><div id="progress-bar"></div></div>
-        <p id="progress-text">Cargando MuJoCo y el robot…</p>
-      </div>
+
+    <main id="workspace">
+      <!-- PANEL IZQUIERDO: cambia según la pestaña activa -->
+      <aside id="left-panel" class="side-panel">
+        <!-- Vista 1: Lista del Catálogo 3D -->
+        <div id="left-catalog" class="panel-view">
+          <div class="panel-header">
+            <h2>Componentes de Hardware</h2>
+            <span class="sync-pill">✓ Sincronizado: Wokwi + Menagerie</span>
+          </div>
+          <p class="panel-help">
+            Haz clic en cualquier componente para <strong>ver su modelo 3D aislado</strong> en el centro y mover su eje o sensor.
+          </p>
+          <select id="cat-filter" aria-label="Filtrar categoría">
+            <option value="">Todas las categorías (14 componentes)</option>
+            <option value="actuators">Motores, Servos y Actuadores</option>
+            <option value="sensors">Sensores (Ultrasonido / Ópticos)</option>
+            <option value="mcus">Microcontroladores y PLC</option>
+            <option value="drivers">Drivers de Potencia (Puentes H)</option>
+            <option value="structures">Ruedas TPU y Estructuras</option>
+          </select>
+          <div id="cat-list" class="card-list"></div>
+        </div>
+
+        <!-- Vista 2: Piezas CAD (.stl) del Usuario en el Assembler -->
+        <div id="left-assembler" class="panel-view" hidden>
+          <div class="panel-header">
+            <h2>Paso 1 · Piezas CAD (.stl)</h2>
+            <span class="sync-pill">7 mallas de Luigi Lab 4</span>
+          </div>
+          <p class="panel-help">
+            Un archivo <code>.stl</code> es solo plástico inerte. Haz clic en cada pieza para <strong>resaltarla en 3D</strong> y ver qué componente del catálogo le da física:
+          </p>
+          <div class="explode-box">
+            <div class="row-between">
+              <label for="explode-slider"><strong>Vista Explosionada 3D:</strong></label>
+              <span id="explode-val">0%</span>
+            </div>
+            <input id="explode-slider" type="range" min="0" max="100" value="0" />
+          </div>
+          <button id="show-all-parts" class="secondary-btn" type="button">Ver todas las piezas juntas</button>
+          <div id="stl-parts-list" class="card-list"></div>
+        </div>
+
+        <!-- Vista 3: Selector de Escenario en el Simulador -->
+        <div id="left-arena" class="panel-view" hidden>
+          <div class="panel-header">
+            <h2>Escenarios Físicos</h2>
+            <span class="sync-pill">MuJoCo WASM 500 Hz</span>
+          </div>
+          <p class="panel-help">
+            Elige qué máquina o robot quieres probar en la arena física:
+          </p>
+          <div id="arena-models-list" class="card-list">
+            <div class="item-card active" data-scene="luigi_lab4/scene.xml">
+              <div class="item-title"><strong>Luigi Lab 4 · Cuello Servo SG90 (P-2)</strong> <span class="badge">Móvil</span></div>
+              <div class="item-sub">7 piezas .stl + 2 motores TT (D5/D6) + Servo SG90 (D9) escaneando a ±70° con HC-SR04 (INT1 en D3).</div>
+            </div>
+            <div class="item-card" data-scene="factory_cell/scene.xml">
+              <div class="item-title"><strong>Celda Industrial de Empaque (P-4)</strong> <span class="badge">Fábrica</span></div>
+              <div class="item-sub">Cinta transportadora + pistón neumático alineador + prensa selladora vertical cronometrada con 3 sensores ópticos.</div>
+            </div>
+            <div class="item-card" data-scene="luigi_lab3/scene.xml">
+              <div class="item-title"><strong>Luigi Lab 3 · Explorador Fijo</strong> <span class="badge">Móvil</span></div>
+              <div class="item-sub">6 piezas .stl + HC-SR04 fijo + radar óptico I2C APDS-9960.</div>
+            </div>
+            <div class="item-card" data-scene="scene.xml">
+              <div class="item-title"><strong>Unitree G1 · Humanoide 29 DOF</strong> <span class="badge">Humanoide</span></div>
+              <div class="item-sub">Política de equilibrio e imitación desde video humano.</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- CENTRO: VISOR 3D INTERACTIVO + BARRA DE CONTROL CONTEXTUAL -->
+      <section id="stage">
+        <div id="stage-banner">
+          <strong id="stage-title">Cargando visor 3D…</strong>
+          <span id="stage-subtitle">Arrastra con el mouse para rotar · Rueda para zoom</span>
+        </div>
+
+        <canvas id="view"></canvas>
+
+        <!-- Controles inferiores sobre el canvas 3D -->
+        <div id="stage-controls">
+          <!-- Control para Pestaña 1 (Probar eje/ángulo del componente aislado) -->
+          <div id="ctrl-catalog" class="ctrl-bar">
+            <label for="comp-joint-slider"><strong id="comp-slider-label">Probar actuador / rotación 3D:</strong></label>
+            <input id="comp-joint-slider" type="range" min="-100" max="100" value="0" />
+            <span id="comp-joint-readout">0.00 rad (0°)</span>
+            <button id="comp-auto-sweep" class="small-btn on" type="button">Movimiento Automático: ON</button>
+          </div>
+
+          <!-- Control para Pestaña 2 (Assembler) -->
+          <div id="ctrl-assembler" class="ctrl-bar" hidden>
+            <span id="assembler-status">7 mallas .stl + 5 componentes del catálogo acoplados</span>
+            <button id="btn-go-simulate" type="button">⚡ Compilar MuJoCo XML y Probar en Arena (Pestaña 3) →</button>
+          </div>
+
+          <!-- Control para Pestaña 3 (Simulador en Arena: Autónomo vs Manual) -->
+          <div id="ctrl-arena" class="ctrl-bar" hidden>
+            <div class="row-wrap">
+              <button id="arena-mode-auto" class="small-btn on" type="button">🤖 Modo Autónomo (Ciclo / Policy)</button>
+              <button id="arena-mode-manual" class="small-btn" type="button">🕹️ Control Manual por Motor</button>
+              <button id="push" class="small-btn" type="button">💥 Empujar</button>
+              <button id="reset" class="small-btn" type="button">↺ Reiniciar</button>
+            </div>
+            <div id="manual-sliders" class="manual-grid" hidden>
+              <div>
+                <label id="lbl-m0">Motor 1 (Izq / Cinta): <span id="val-m0">0</span></label>
+                <input id="sld-m0" type="range" min="-100" max="100" value="0" />
+              </div>
+              <div>
+                <label id="lbl-m1">Motor 2 (Der / Pistón): <span id="val-m1">0</span></label>
+                <input id="sld-m1" type="range" min="-100" max="100" value="0" />
+              </div>
+              <div id="box-m2">
+                <label id="lbl-m2">Motor 3 (Cuello SG90 / Selladora): <span id="val-m2">0</span></label>
+                <input id="sld-m2" type="range" min="-100" max="100" value="0" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="loading">
+          <div class="track"><div id="progress-bar"></div></div>
+          <p id="progress-text">Cargando MuJoCo y modelos 3D…</p>
+        </div>
+      </section>
+
+      <!-- PANEL DERECHO: Ficha técnica / Mapeo de pines + Código .ino / Telemetría -->
+      <aside id="right-panel" class="side-panel">
+        <!-- Vista Derecha 1: Ficha Técnica del Componente + CRUD -->
+        <div id="right-catalog" class="panel-view">
+          <div class="panel-header">
+            <h2 id="spec-title">Ficha del Componente</h2>
+            <span id="spec-badge" class="badge">servo</span>
+          </div>
+          <div id="spec-details" class="spec-box"></div>
+
+          <form id="add-comp-form" class="crud-box">
+            <h3>+ Añadir Componente al Catálogo (CRUD)</h3>
+            <div class="row-2">
+              <input id="comp-id" placeholder="id (ej. servo_mg996r)" required />
+              <select id="comp-cat">
+                <option value="servo">Servo rotacional</option>
+                <option value="dc_motor">Motor DC</option>
+                <option value="distance_sensor">Sensor ultrasónico/ToF</option>
+                <option value="linear_actuator">Cilindro lineal</option>
+              </select>
+            </div>
+            <input id="comp-name" placeholder="Nombre (ej. MG996R High-Torque Servo)" required />
+            <div class="row-2">
+              <input id="comp-kp" type="number" step="0.1" value="6.5" placeholder="Ganancia kp/kv" />
+              <input id="comp-force" type="number" step="0.1" value="1.8" placeholder="Torque máx (N·m)" />
+            </div>
+            <button type="submit">Guardar y Ver en 3D</button>
+          </form>
+        </div>
+
+        <!-- Vista Derecha 2: Conexión con el Código Arduino (.ino) y Reglas de Pines -->
+        <div id="right-assembler" class="panel-view" hidden>
+          <div class="panel-header">
+            <h2>Paso 2 · Código (.ino) y Pines</h2>
+            <span class="sync-pill">Parser Determinista</span>
+          </div>
+          <p class="panel-help">
+            Al subir <code>LAB4_Robot_Explorador_Autonomo.ino</code>, Tridi extrae los pines, valida los timers del Arduino UNO y detecta qué bloquea el robot:
+          </p>
+          <div id="ino-analysis-box" class="spec-box"></div>
+          <div class="spec-box">
+            <h3>XML MuJoCo Generado por <code>assembler.js</code></h3>
+            <pre id="generated-xml-preview"></pre>
+          </div>
+        </div>
+
+        <!-- Vista Derecha 3: Telemetría en Vivo de la Simulación -->
+        <div id="right-arena" class="panel-view" hidden>
+          <div class="panel-header">
+            <h2>Telemetría en Vivo (50 Hz)</h2>
+            <span id="telemetry-hz" class="sync-pill">500 Hz física</span>
+          </div>
+          <div id="arena-telemetry" class="spec-box"></div>
+          <div id="arena-explanation" class="spec-box"></div>
+        </div>
+      </aside>
     </main>
-    <footer><span id="stats"></span><span id="camera-stats"></span></footer>
+
+    <footer>
+      <span id="stats">Iniciando motor MuJoCo WASM…</span>
+      <span id="camera-stats"></span>
+    </footer>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

@@ -1,0 +1,202 @@
+{
+  "standard": "ANSI/ISA-5.1 & ISA-88 (Batch & Process Control)",
+  "version": "2026.11",
+  "firstLetters": {
+    "A": { "variable": "Analysis", "es": "Análisis (pH, conductividad, composición)" },
+    "F": { "variable": "Flow Rate", "es": "Caudal / Flujo" },
+    "L": { "variable": "Level", "es": "Nivel" },
+    "P": { "variable": "Pressure / Vacuum", "es": "Presión / Vacío" },
+    "S": { "variable": "Speed / Frequency", "es": "Velocidad / Frecuencia" },
+    "T": { "variable": "Temperature", "es": "Temperatura" },
+    "V": { "variable": "Vibration / Mechanical Analysis", "es": "Vibración / Análisis mecánico" },
+    "W": { "variable": "Weight / Force", "es": "Peso / Fuerza (Celdas de carga)" },
+    "Z": { "variable": "Position / Dimension", "es": "Posición / Actuador lineal" }
+  },
+  "succeedingLetters": {
+    "C": { "function": "Control", "es": "Controlador" },
+    "E": { "function": "Sensor / Primary Element", "es": "Elemento primario" },
+    "H": { "function": "High Alarm / Switch", "es": "Alto (Alarma / Switch)" },
+    "I": { "function": "Indicate", "es": "Indicador" },
+    "L": { "function": "Low Alarm / Switch", "es": "Bajo (Alarma / Switch)" },
+    "S": { "function": "Switch", "es": "Interruptor discreto" },
+    "T": { "function": "Transmitter", "es": "Transmisor (4-20 mA)" },
+    "V": { "function": "Valve / Damper", "es": "Válvula de control / corte" },
+    "Y": { "function": "Relay / Compute / Solenoid", "es": "Solenoide / Relé" },
+    "Z": { "function": "Safety Actuator / Drive", "es": "Elemento final de seguridad" }
+  },
+  "tagClasses": {
+    "FV": {
+      "prefix": "FV",
+      "category": "actuator",
+      "isaName": "Flow Control / Solenoid Valve",
+      "isaNameEs": "Válvula solenoide / control de flujo",
+      "ioRequirements": [
+        { "suffix": "CMD", "type": "DO", "signal": "24V DC Solenoid", "description": "Valve open command" },
+        { "suffix": "ZSO", "type": "DI", "signal": "24V DC PNP", "description": "Valve open limit switch feedback" }
+      ],
+      "failSafe": "FC (Fail Closed — spring return on air/power loss)",
+      "plcBlock": "FB_Valve_Standard",
+      "geometry3d": { "kind": "valve", "radius": 0.06, "length": 0.14, "color": [0.92, 0.36, 0.16, 1] }
+    },
+    "WT": {
+      "prefix": "WT",
+      "category": "sensor",
+      "isaName": "Weight / Load-Cell Transmitter (Rice Lake / Hardy)",
+      "isaNameEs": "Transmisor de peso por celdas de carga (Rice Lake)",
+      "ioRequirements": [
+        { "suffix": "PV", "type": "AI", "signal": "4-20 mA (0-500 kg)", "description": "Gross/net vessel weight transmitter" }
+      ],
+      "failSafe": "Fail High / Out-of-Range Wire Break Detection (< 3.6 mA)",
+      "plcBlock": "FB_Analog_Scale",
+      "geometry3d": { "kind": "scale", "size": [0.36, 0.36, 0.06], "color": [0.22, 0.65, 0.92, 1] }
+    },
+    "LT": {
+      "prefix": "LT",
+      "category": "sensor",
+      "isaName": "Continuous Level Transmitter",
+      "isaNameEs": "Transmisor continuo de nivel (0-100 %)",
+      "ioRequirements": [
+        { "suffix": "PV", "type": "AI", "signal": "4-20 mA (0-100 %)", "description": "Continuous vessel level" }
+      ],
+      "failSafe": "Wire Break Fault (< 3.6 mA trips feed valves)",
+      "plcBlock": "FB_Analog_Scale",
+      "geometry3d": { "kind": "sensor", "radius": 0.04, "length": 0.12, "color": [0.22, 0.65, 0.92, 1] }
+    },
+    "LSH": {
+      "prefix": "LSH",
+      "category": "safety_switch",
+      "isaName": "Level Switch High (Overfill Interlock)",
+      "isaNameEs": "Interruptor de nivel alto (Interlock anti-desborde)",
+      "ioRequirements": [
+        { "suffix": "ALM", "type": "DI", "signal": "24V DC NC (Fail-Safe)", "description": "High level hardwired interlock (0 = Trip)" }
+      ],
+      "failSafe": "NC Contact (Opens on high level or wire break — trips inlet valves)",
+      "plcBlock": "FB_Level_Interlock",
+      "geometry3d": { "kind": "sensor", "radius": 0.045, "length": 0.1, "color": [0.96, 0.26, 0.26, 1] }
+    },
+    "LSL": {
+      "prefix": "LSL",
+      "category": "safety_switch",
+      "isaName": "Level Switch Low (Dry-Run Protection)",
+      "isaNameEs": "Interruptor de nivel bajo (Protección marcha en vacío)",
+      "ioRequirements": [
+        { "suffix": "STS", "type": "DI", "signal": "24V DC NO", "description": "Low level empty detection" }
+      ],
+      "failSafe": "Trips discharge pump & closes outlet valve when empty",
+      "plcBlock": "FB_Level_Interlock",
+      "geometry3d": { "kind": "sensor", "radius": 0.045, "length": 0.1, "color": [0.95, 0.75, 0.2, 1] }
+    },
+    "PT": {
+      "prefix": "PT",
+      "category": "sensor",
+      "isaName": "Pressure Transmitter",
+      "isaNameEs": "Transmisor de presión de línea",
+      "ioRequirements": [
+        { "suffix": "PV", "type": "AI", "signal": "4-20 mA (0-10 bar)", "description": "Line pressure transmitter" }
+      ],
+      "failSafe": "High-pressure trip > 8.5 bar",
+      "plcBlock": "FB_Analog_Scale",
+      "geometry3d": { "kind": "sensor", "radius": 0.04, "length": 0.1, "color": [0.22, 0.65, 0.92, 1] }
+    },
+    "TT": {
+      "prefix": "TT",
+      "category": "sensor",
+      "isaName": "Temperature Transmitter (PT100 RTD)",
+      "isaNameEs": "Transmisor de temperatura (RTD PT100)",
+      "ioRequirements": [
+        { "suffix": "PV", "type": "AI", "signal": "4-20 mA (0-150 °C)", "description": "Process temperature transmitter" }
+      ],
+      "failSafe": "Over-temperature trip > 95 °C",
+      "plcBlock": "FB_Analog_Scale",
+      "geometry3d": { "kind": "sensor", "radius": 0.04, "length": 0.1, "color": [0.96, 0.55, 0.2, 1] }
+    },
+    "M": {
+      "prefix": "M",
+      "category": "actuator",
+      "isaName": "Three-Phase Induction Motor / Agitator",
+      "isaNameEs": "Motor trifásico / Agitador industrial",
+      "ioRequirements": [
+        { "suffix": "START", "type": "DO", "signal": "24V DC Contactor Coil", "description": "Motor contactor run command" },
+        { "suffix": "RUN", "type": "DI", "signal": "24V DC Aux Contact", "description": "Contactor auxiliary run confirmation" },
+        { "suffix": "OL", "type": "DI", "signal": "24V DC NC Thermal Overload", "description": "Thermal overload relay healthy (1 = OK, 0 = Fault)" }
+      ],
+      "failSafe": "Fail Stop (Drops contactor immediately on thermal overload or E-Stop)",
+      "plcBlock": "FB_Motor_Standard",
+      "geometry3d": { "kind": "motor", "radius": 0.09, "length": 0.22, "color": [0.2, 0.82, 0.48, 1] }
+    },
+    "P": {
+      "prefix": "P",
+      "category": "actuator",
+      "isaName": "Centrifugal / Positive Displacement Transfer Pump",
+      "isaNameEs": "Bomba centrífuga de transferencia",
+      "ioRequirements": [
+        { "suffix": "START", "type": "DO", "signal": "24V DC Contactor", "description": "Pump motor start command" },
+        { "suffix": "RUN", "type": "DI", "signal": "24V DC Aux Contact", "description": "Pump running status feedback" },
+        { "suffix": "OL", "type": "DI", "signal": "24V DC NC Thermal Overload", "description": "Pump thermal overload healthy" }
+      ],
+      "failSafe": "Fail Stop (Interlocked with LSL low-level switch to prevent dry run)",
+      "plcBlock": "FB_Motor_Standard",
+      "geometry3d": { "kind": "motor", "radius": 0.09, "length": 0.2, "color": [0.18, 0.72, 0.64, 1] }
+    },
+    "TK": {
+      "prefix": "TK",
+      "category": "equipment",
+      "isaName": "Process Mixing Vessel / Hopper Tank",
+      "isaNameEs": "Tanque mezclador / Tolva de proceso",
+      "ioRequirements": [],
+      "failSafe": "Atmospheric vent + LSH hardware overfill protection",
+      "plcBlock": "FB_Batch_Sequencer",
+      "geometry3d": { "kind": "tank", "radius": 0.28, "height": 0.56, "color": [0.68, 0.73, 0.78, 1] }
+    },
+    "SL": {
+      "prefix": "SL",
+      "category": "equipment",
+      "isaName": "Vertical Bulk Storage Silo",
+      "isaNameEs": "Silo vertical de almacenamiento a granel",
+      "ioRequirements": [],
+      "failSafe": "High/Low level sensors + rotary airlock isolation",
+      "plcBlock": "FB_Batch_Sequencer",
+      "geometry3d": { "kind": "silo", "radius": 0.24, "height": 0.78, "color": [0.76, 0.79, 0.83, 1] }
+    },
+    "SC": {
+      "prefix": "SC",
+      "category": "actuator",
+      "isaName": "Enclosed Screw Conveyor (Auger)",
+      "isaNameEs": "Transportador de tornillo sinfín",
+      "ioRequirements": [
+        { "suffix": "START", "type": "DO", "signal": "24V DC VFD Run", "description": "Screw conveyor drive enable" },
+        { "suffix": "RUN", "type": "DI", "signal": "24V DC VFD Running", "description": "Screw conveyor running feedback" },
+        { "suffix": "OL", "type": "DI", "signal": "24V DC NC VFD Fault", "description": "Screw conveyor torque/thermal OK" }
+      ],
+      "failSafe": "Fail Stop (Interlocked with downstream sifter and receiving hopper LSH)",
+      "plcBlock": "FB_Motor_Standard",
+      "geometry3d": { "kind": "conveyor", "size": [0.85, 0.14, 0.1], "color": [0.46, 0.52, 0.58, 1] }
+    },
+    "CV": {
+      "prefix": "CV",
+      "category": "actuator",
+      "isaName": "Belt / Roller Transfer Conveyor",
+      "isaNameEs": "Cinta transportadora de salida",
+      "ioRequirements": [
+        { "suffix": "START", "type": "DO", "signal": "24V DC VFD Run", "description": "Belt conveyor drive command" },
+        { "suffix": "RUN", "type": "DI", "signal": "24V DC Aux Contact", "description": "Belt conveyor running status" }
+      ],
+      "failSafe": "Fail Stop on emergency pull-cord or downstream jam",
+      "plcBlock": "FB_Motor_Standard",
+      "geometry3d": { "kind": "conveyor", "size": [0.95, 0.22, 0.08], "color": [0.35, 0.4, 0.46, 1] }
+    },
+    "PK": {
+      "prefix": "PK",
+      "category": "equipment",
+      "isaName": "Automated Bagging & Sealing Station",
+      "isaNameEs": "Estación empacadora y selladora",
+      "ioRequirements": [
+        { "suffix": "CYCLE", "type": "DO", "signal": "24V DC Solenoid", "description": "Execute bag fill & heat-seal cycle" },
+        { "suffix": "RDY", "type": "DI", "signal": "24V DC PNP", "description": "Packager ready / bag clamped" }
+      ],
+      "failSafe": "Fail Open Clamp / Heater Off on E-Stop",
+      "plcBlock": "FB_Valve_Standard",
+      "geometry3d": { "kind": "packager", "size": [0.26, 0.26, 0.38], "color": [0.78, 0.98, 0.22, 1] }
+    }
+  }
+}

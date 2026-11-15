@@ -1,0 +1,29 @@
+<mujoco model="component_l298n">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.04">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <body name="board_turntable" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.026" diaginertia="0.0001 0.0001 0.0001"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" range="-3.14 3.14" damping="0.05" armature="0.002"/>
+        <geom name="l298n_pcb" type="box" pos="0 0 0" size="0.054 0.054 0.0032" group="2" rgba="0.82 0.12 0.12 1"/>
+        <geom name="heatsink_black" type="box" pos="0.010 0 0.028" size="0.022 0.032 0.025" group="2" rgba="0.12 0.13 0.16 1"/>
+        <geom name="term_out_a" type="box" pos="0 0.044 0.012" size="0.012 0.008 0.010" group="2" rgba="0.10 0.45 0.85 1"/>
+        <geom name="term_out_b" type="box" pos="0 -0.044 0.012" size="0.012 0.008 0.010" group="2" rgba="0.10 0.45 0.85 1"/>
+        <geom name="term_pwr" type="box" pos="-0.042 -0.018 0.012" size="0.008 0.018 0.010" group="2" rgba="0.10 0.45 0.85 1"/>
+        <geom name="cap_1" type="cylinder" pos="-0.022 0.020 0.014" size="0.008 0.011" group="2" rgba="0.18 0.20 0.24 1"/>
+        <geom name="cap_2" type="cylinder" pos="-0.022 -0.002 0.014" size="0.008 0.011" group="2" rgba="0.18 0.20 0.24 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="demo_actuator" joint="demo_joint" kp="3.0" ctrlrange="-3.14 3.14" ctrllimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>

@@ -1,0 +1,127 @@
+<mujoco model="luigi_lab4">
+  <compiler angle="radian" meshdir="assets"/>
+
+  <option timestep="0.002" iterations="50" ls_iterations="10"/>
+
+  <asset>
+    <!-- Exact parametric CAD meshes from Luigi D'Aquaro & Jorge Younes (Laboratorio IV, mm -> 2x scale = 0.002 m/mm) -->
+    <mesh name="chasis_mesh" file="1_chasis_robot.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="soporte_motor_mesh" file="2_soporte_motor_x2.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="patin_mesh" file="3_patin_delantero.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="bandeja_mesh" file="4_bandeja_protoboard.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="rin_mesh" file="5_rin_x2.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="llanta_mesh" file="6_llanta_x2_TPU.stl" scale="0.002 0.002 0.002"/>
+    <mesh name="cabeza_servo_mesh" file="7_cabeza_sensor_servo.stl" scale="0.002 0.002 0.002"/>
+  </asset>
+
+  <worldbody>
+    <!-- Root body named "pelvis" (with child "torso_link") so Tridi's camera tracker and push tool work seamlessly -->
+    <body name="pelvis" pos="0 0 0.0875">
+      <freejoint name="floating_base"/>
+      <inertial pos="0.015 0 0.01" mass="2.25" diaginertia="0.013 0.019 0.025"/>
+
+      <body name="torso_link" pos="0 0 0.03">
+        <inertial pos="0 0 0" mass="0.2" diaginertia="0.001 0.001 0.001"/>
+      </body>
+
+      <!-- CAD frame: origin at rear edge of plate (x = -0.15 m), centerline (y = 0), bottom of plate (z = 0) -->
+      <body name="cad_origin" pos="-0.15 0 0">
+        <!-- 1. Chasis principal Lab IV extendido a 180 mm con alojamiento para micro-servo SG90 -->
+        <geom name="chasis_visual" type="mesh" mesh="chasis_mesh" group="2" contype="0" conaffinity="0" rgba="0.95 0.45 0.10 1"/>
+        <geom name="chasis_collision" type="box" pos="0.18 0 0.03" size="0.182 0.112 0.032" group="3" contype="1" conaffinity="1" friction="0.3 0.01 0.005"/>
+
+        <!-- 2. Soportes de motor izquierdo y derecho -->
+        <geom name="soporte_izq_visual" type="mesh" mesh="soporte_motor_mesh" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.88 0.40 0.08 1"/>
+        <geom name="soporte_der_visual" type="mesh" mesh="soporte_motor_mesh" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.88 0.40 0.08 1"/>
+
+        <!-- 3. Patin delantero (tercer apoyo en X = 138 mm -> 0.276 m en marco CAD) -->
+        <geom name="patin_visual" type="mesh" mesh="patin_mesh" pos="0.552 0 0" quat="0 0 1 0" group="2" contype="0" conaffinity="0" rgba="0.90 0.42 0.09 1"/>
+        <geom name="patin_collision" type="sphere" pos="0.276 0 -0.0675" size="0.020" group="3" contype="1" conaffinity="1" friction="0.02 0.005 0.001"/>
+        <geom name="rear_skid_collision" type="sphere" pos="0.020 0 -0.0675" size="0.018" group="3" contype="1" conaffinity="1" friction="0.02 0.005 0.001"/>
+
+        <!-- 4. Bandeja elevada para la protoboard (z = T + POSTE_H = 33.5 mm -> 0.067 m) -->
+        <geom name="bandeja_visual" type="mesh" mesh="bandeja_mesh" pos="0 0 0.067" group="2" contype="0" conaffinity="0" rgba="0.95 0.45 0.10 1"/>
+
+        <!-- Motores DC TT amarillos (3-6V, 200 RPM) + cilindros metálicos traseros bajo la placa -->
+        <geom name="motor_tt_izq" type="box" pos="0.115 0.0812 -0.0225" size="0.052 0.0188 0.0225" group="2" contype="0" conaffinity="0" rgba="0.95 0.80 0.10 1"/>
+        <geom name="motor_tt_der" type="box" pos="0.115 -0.0812 -0.0225" size="0.052 0.0188 0.0225" group="2" contype="0" conaffinity="0" rgba="0.95 0.80 0.10 1"/>
+        <geom name="motor_can_izq" type="cylinder" pos="0.180 0.0812 -0.0225" quat="0.7071068 0 0.7071068 0" size="0.017 0.018" group="2" contype="0" conaffinity="0" rgba="0.76 0.78 0.82 1"/>
+        <geom name="motor_can_der" type="cylinder" pos="0.180 -0.0812 -0.0225" quat="0.7071068 0 0.7071068 0" size="0.017 0.018" group="2" contype="0" conaffinity="0" rgba="0.76 0.78 0.82 1"/>
+
+        <!-- Portapilas negro + 2 baterias IMR18650B verdes (3.7V x 2 = 7.4V) bajo la placa -->
+        <geom name="portapilas_box" type="box" pos="0.147 0 -0.018" size="0.077 0.042 0.008" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+        <geom name="cell_18650_1" type="cylinder" pos="0.147 0.020 -0.028" quat="0.7071068 0 0.7071068 0" size="0.018 0.068" group="2" contype="0" conaffinity="0" rgba="0.38 0.78 0.36 1"/>
+        <geom name="cell_18650_2" type="cylinder" pos="0.147 -0.020 -0.028" quat="0.7071068 0 0.7071068 0" size="0.018 0.068" group="2" contype="0" conaffinity="0" rgba="0.38 0.78 0.36 1"/>
+
+        <!-- Arduino UNO R3 azul + conector USB plateado + headers negros -->
+        <geom name="arduino_pcb" type="box" pos="0.2173 0 0.0206" size="0.0533 0.0686 0.0032" group="2" contype="0" conaffinity="0" rgba="0.04 0.42 0.68 1"/>
+        <geom name="arduino_usb" type="box" pos="0.240 0.0486 0.034" size="0.012 0.016 0.011" group="2" contype="0" conaffinity="0" rgba="0.82 0.84 0.86 1"/>
+        <geom name="arduino_dc" type="box" pos="0.182 0.052 0.033" size="0.014 0.011 0.010" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="arduino_hdr_l" type="box" pos="0.217 0.062 0.028" size="0.042 0.003 0.005" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+        <geom name="arduino_hdr_r" type="box" pos="0.217 -0.062 0.028" size="0.042 0.003 0.005" group="2" contype="0" conaffinity="0" rgba="0.10 0.10 0.12 1"/>
+
+        <!-- Puente H L298N rojo + disipador negro bajo la bandeja -->
+        <geom name="l298n_pcb" type="box" pos="0.103 0 0.0186" size="0.043 0.043 0.0032" group="2" contype="0" conaffinity="0" rgba="0.82 0.12 0.12 1"/>
+        <geom name="l298n_heatsink" type="box" pos="0.137 0 0.045" size="0.020 0.029 0.025" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+
+        <!-- Protoboard blanca de 400 puntos -->
+        <geom name="protoboard_body" type="box" pos="0.057 0 0.0815" size="0.055 0.083 0.0095" group="2" contype="0" conaffinity="0" rgba="0.94 0.94 0.92 1"/>
+
+        <!-- Cuerpo estático del Micro-Servo SG90 azul empotrado en la ranura delantera (X = 165 mm -> 0.330 m) -->
+        <geom name="sg90_body" type="box" pos="0.330 -0.0108 0.004" size="0.0126 0.0232 0.022" group="2" contype="0" conaffinity="0" rgba="0.10 0.38 0.82 1"/>
+        <geom name="sg90_flange" type="box" pos="0.330 -0.0108 0.010" size="0.0126 0.0325 0.0025" group="2" contype="0" conaffinity="0" rgba="0.10 0.38 0.82 1"/>
+        <geom name="sg90_boss" type="cylinder" pos="0.330 0 0.020" size="0.011 0.006" group="2" contype="0" conaffinity="0" rgba="0.10 0.38 0.82 1"/>
+
+        <!-- 5 & 6. Rueda izquierda (qpos[7], ctrl[0]) -->
+        <body name="left_wheel_link" pos="0.080 0.132 -0.0225">
+          <inertial pos="0 0 0" mass="0.35" diaginertia="0.0008 0.0014 0.0008"/>
+          <joint name="left_wheel_joint" type="hinge" axis="0 1 0" damping="0.08" armature="0.005"/>
+          <geom name="rin_izq_visual" type="mesh" mesh="rin_mesh" pos="0 0.026 0" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.98 0.85 0.05 1"/>
+          <geom name="llanta_izq_visual" type="mesh" mesh="llanta_mesh" pos="0 0.026 0" quat="0.7071068 0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+          <geom name="left_wheel_collision" type="cylinder" quat="0.7071068 0.7071068 0 0" size="0.065 0.024" group="3" contype="1" conaffinity="1" friction="1.1 0.01 0.005"/>
+        </body>
+
+        <!-- 5 & 6. Rueda derecha (qpos[8], ctrl[1]) -->
+        <body name="right_wheel_link" pos="0.080 -0.132 -0.0225">
+          <inertial pos="0 0 0" mass="0.35" diaginertia="0.0008 0.0014 0.0008"/>
+          <joint name="right_wheel_joint" type="hinge" axis="0 1 0" damping="0.08" armature="0.005"/>
+          <geom name="rin_der_visual" type="mesh" mesh="rin_mesh" pos="0 -0.026 0" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.98 0.85 0.05 1"/>
+          <geom name="llanta_der_visual" type="mesh" mesh="llanta_mesh" pos="0 -0.026 0" quat="0.7071068 -0.7071068 0 0" group="2" contype="0" conaffinity="0" rgba="0.12 0.12 0.14 1"/>
+          <geom name="right_wheel_collision" type="cylinder" quat="0.7071068 0.7071068 0 0" size="0.065 0.024" group="3" contype="1" conaffinity="1" friction="1.1 0.01 0.005"/>
+        </body>
+
+        <!-- 7. Articulación revoluta del cuello SG90 (qpos[9], ctrl[2], 0°..180° -> -90°..+90° rad) con 7_cabeza_sensor_servo.stl + HC-SR04 -->
+        <body name="head_neck_link" pos="0.330 0 0.025">
+          <inertial pos="0.004 0 0.025" mass="0.028" diaginertia="0.00002 0.00002 0.00003"/>
+          <!-- Joint axis="0 0 1": +rad turns left (180° in Servo.h), -rad turns right (0° in Servo.h), 0 rad looks straight ahead (90°) -->
+          <joint name="neck_servo_joint" type="hinge" axis="0 0 1" range="-1.5708 1.5708" damping="0.04" armature="0.002"/>
+          <geom name="servo_horn_white" type="cylinder" pos="0 0 -0.001" size="0.009 0.002" group="2" contype="0" conaffinity="0" rgba="0.95 0.95 0.95 1"/>
+          <geom name="cabeza_servo_visual" type="mesh" mesh="cabeza_servo_mesh" pos="0 0 0" group="2" contype="0" conaffinity="0" rgba="0.95 0.45 0.10 1"/>
+
+          <!-- Sensor ultrasónico HC-SR04 montado sobre la cabeza móvil (gira solidario con el cuello SG90) -->
+          <geom name="hcsr04_pcb" type="box" pos="0.008 0 0.026" size="0.003 0.045 0.020" group="2" contype="0" conaffinity="0" rgba="0.08 0.34 0.78 1"/>
+          <geom name="hcsr04_eye_l" type="cylinder" pos="0.020 0.026 0.026" quat="0.7071068 0 0.7071068 0" size="0.016 0.012" group="2" contype="0" conaffinity="0" rgba="0.78 0.80 0.84 1"/>
+          <geom name="hcsr04_eye_r" type="cylinder" pos="0.020 -0.026 0.026" quat="0.7071068 0 0.7071068 0" size="0.016 0.012" group="2" contype="0" conaffinity="0" rgba="0.78 0.80 0.84 1"/>
+          <geom name="hcsr04_mesh_l" type="cylinder" pos="0.0325 0.026 0.026" quat="0.7071068 0 0.7071068 0" size="0.013 0.001" group="2" contype="0" conaffinity="0" rgba="0.18 0.20 0.22 1"/>
+          <geom name="hcsr04_mesh_r" type="cylinder" pos="0.0325 -0.026 0.026" quat="0.7071068 0 0.7071068 0" size="0.013 0.001" group="2" contype="0" conaffinity="0" rgba="0.18 0.20 0.22 1"/>
+          <site name="hcsr04_origin" pos="0.025 0 0.026" size="0.004"/>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <contact>
+    <pair geom1="left_wheel_collision" geom2="floor" condim="3" friction="1.1 1.1 0.01"/>
+    <pair geom1="right_wheel_collision" geom2="floor" condim="3" friction="1.1 1.1 0.01"/>
+    <pair geom1="patin_collision" geom2="floor" condim="3" friction="0.02 0.02 0.001"/>
+    <pair geom1="rear_skid_collision" geom2="floor" condim="3" friction="0.02 0.02 0.001"/>
+    <pair geom1="chasis_collision" geom2="floor" condim="3" friction="0.3 0.3 0.01"/>
+  </contact>
+
+  <!-- 2 TT DC Motor velocity servos (ENA=D5, ENB=D6) + 1 SG90 position servo on neck (D9, ±90 deg = ±1.5708 rad) -->
+  <actuator>
+    <velocity name="left_wheel_motor" joint="left_wheel_joint" kv="0.8" ctrlrange="-20.94 20.94" ctrllimited="true" forcerange="-3.5 3.5" forcelimited="true"/>
+    <velocity name="right_wheel_motor" joint="right_wheel_joint" kv="0.8" ctrlrange="-20.94 20.94" ctrllimited="true" forcerange="-3.5 3.5" forcelimited="true"/>
+    <position name="neck_servo_motor" joint="neck_servo_joint" kp="4.5" ctrlrange="-1.5708 1.5708" ctrllimited="true" forcerange="-0.6 0.6" forcelimited="true"/>
+  </actuator>
+</mujoco>

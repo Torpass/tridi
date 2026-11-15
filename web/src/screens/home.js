@@ -20,6 +20,7 @@ const walkPolicy = Object.values(import.meta.glob('../../../training/policies/g1
 import { fetchClip, preloaded } from '../preloaded.js';
 import { LOGO, WORDMARK } from '../brand.js';
 import { createPushArrow } from '../push-arrow.js';
+import { fetchCachedJson, fetchCachedOnnxBytes } from 'tridi-physics';
 import { attachRobot, onRobotProgress, robotView } from '../robot-host.js';
 import { prefetch } from '../router.js';
 import { SkeletonView } from '../skeleton.js';
@@ -31,7 +32,6 @@ gsap.registerPlugin(ScrollTrigger);
 
 export const title = '';
 
-const REPO = 'https://github.com/Torpass/tridi';
 // The walk of Capture: the clip extracted from this very video (data/samples/mixkit-4855.mp4,
 // re-encoded small into public/media). Clip and video start together and last the same 11.8 s.
 // Capture 2.0's walk (GVHMR, data/capture2): the same Mixkit video and frames as the MediaPipe one it
@@ -49,11 +49,10 @@ const GYM_PUSH_EVERY_S = 3.2; // the Gym pushes the standing robot this often, g
 const GYM_FIRST_PUSH_S = 2.0;
 const GYM_RESTART_S = 1.6; // a fallen robot lies this long before it is stood up again
 const AFTER_PUSH_S = 5; // after a push in the hero, the robot stands this long before it is reset
-// The Gym in four stops of the real training (stand-300m, training/README.md), each a saved
+// The Gym in three stops of the real training (stand-300m, training/README.md), each a saved
 // checkpoint with what training.evaluate measured for it: seconds standing (of 20) and 250 N
 // pushes held (of 4).
 const GYM_STAGES = [
-  { level: 'g1-stand-step-0', steps: 0, label: '0', up: 1.1, pushes: 0, maxN: 0 },
   { level: 'g1-stand-step-10000000', steps: 10e6, label: '10 M', up: 11.2, pushes: 1.6, maxN: 200 },
   { level: 'g1-stand-step-100000000', steps: 100e6, label: '100 M', up: 20, pushes: 4, maxN: 350 },
   { level: 'g1-stand', steps: 300e6, label: '300 M', up: 20, pushes: 4, maxN: 500 },
@@ -78,9 +77,9 @@ const narrow = () => innerWidth < 860;
 const SHOTS = {
   hero: { az: 22, el: 3, dist: 1.35, aim: 1.08, shift: 0.2, follow: 0.5 },
   capture: { az: -90, el: 6, dist: 3.3, aim: 0.8, shift: 0.24, follow: 0.15 },
-  gym: { az: 38, el: 12, dist: 3.7, aim: 0.75, shift: 0.2, follow: 1 },
-  policy: { az: 60, el: 15, dist: 3.3, aim: 0.72, shift: -0.24, follow: 1.5 },
-  close: { az: 140, el: 16, dist: 6.5, aim: 0.8, shift: 0, follow: 1.5 },
+  gym: { az: 38, el: 12, dist: 3.5, aim: 0.78, shift: 0.2, follow: 0.6 },
+  policy: { az: -26, el: 6, dist: 2.25, aim: 0.86, shift: -0.22, follow: 0.25 },
+  close: { az: 140, el: 16, dist: 6.2, aim: 0.8, shift: 0, follow: 1.2 },
 };
 // On phones the words sit low: no sideways shift, farther away, and aimed below the robot so it
 // stands in the upper half of the screen.
@@ -101,10 +100,13 @@ export function mount(root) {
         <div class="boot-track"><i class="boot-bar"></i></div>
       </div>
     </div>
-    <div class="film-hud">
+    <div class="film-hud" data-shot="hero">
       <i class="corner tl" aria-hidden="true"></i><i class="corner tr" aria-hidden="true"></i><i class="corner bl" aria-hidden="true"></i><i class="corner br" aria-hidden="true"></i>
-      <div class="sim-readout">
-        <span data-sim="rates">MuJoCo</span><span>t <b data-sim="time">0,0</b> s</span><span>${T('sim.contacts')} <b data-sim="contacts">0</b></span>
+      <div class="sim-readout" data-state="stand">
+        <span class="sim-live-pill"><i class="sim-state-dot" aria-hidden="true"></i><span data-sim="state">${T('hud.stand')}</span></span>
+        <span data-sim="rates">MuJoCo</span>
+        <span>t <b data-sim="time">0,0</b> s</span>
+        <span>${T('sim.contacts')} <b data-sim="contacts">0</b></span>
         <button type="button" class="sim-info-btn" aria-label="Info">ⓘ<span class="sim-tooltip" role="tooltip">${T('sim.info')}</span></button>
       </div>
     </div>
@@ -112,20 +114,87 @@ export function mount(root) {
     <div class="film-wash" aria-hidden="true"></div>
 
     <header class="topbar">
-      <a class="wordmark" href="#/" ${A({ 'aria-label': 'nav.home' })}>${LOGO}${WORDMARK}</a>
-      <nav class="topnav" ${A({ 'aria-label': 'nav.product' })}>
-        <a href="#capture">Capture</a>
-        <a href="#gym">Gym</a>
-        <a href="#policy">Policy</a>
-        <a href="#/simulations" data-warm="simulations">${T('nav.simulations')}</a>
-        <a href="#/milestones" data-warm="milestones">${T('nav.milestones')}</a>
+      <a class="wordmark" href="#home" ${A({ 'aria-label': 'nav.home' })}>${LOGO}${WORDMARK}</a>
+      <nav class="topnav" ${A({ 'aria-label': 'nav.menu' })}>
+        <a class="nav-direct" href="#capture">Capture</a>
+        <a class="nav-direct" href="#gym">Gym</a>
+        <a class="nav-direct" href="#policy">Policy</a>
+        <i class="topnav-sep" aria-hidden="true"></i>
+        <div class="nav-drop" data-drop="studio">
+          <button type="button" class="nav-drop-btn" aria-expanded="false">
+            <span>${T('nav.studio')}</span>
+            <svg class="nav-chev" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 4.5L6 8l3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div class="nav-drop-panel nav-drop-studio" role="menu">
+            <a class="nav-drop-item" href="#/simulations" data-warm="simulations">
+              <span class="nav-chip nav-chip-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 2.5 3.5 7v10L12 21.5l8.5-4.5V7L12 2.5Z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>
+              </span>
+              <div class="nav-item-body">
+                <div class="nav-item-head">
+                  <b>${T('nav.simulations')}</b>
+                </div>
+                <span>${T('nav.simsSub')}</span>
+              </div>
+            </a>
+            <a class="nav-drop-item" href="#/live" data-warm="live">
+              <span class="nav-chip nav-chip-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.2 5.5-3.2v10L16 13.8"/><circle cx="9.25" cy="12" r="2.2"/></svg>
+              </span>
+              <div class="nav-item-body">
+                <div class="nav-item-head">
+                  <b>${T('nav.live')}</b>
+                </div>
+                <span>${T('nav.liveSub')}</span>
+              </div>
+            </a>
+            <a class="nav-drop-item" href="#/upload" data-warm="upload">
+              <span class="nav-chip nav-chip-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 15.5V4.5m0 0-4 4m4-4 4 4"/><path d="M4 15.5v3a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5v-3"/></svg>
+              </span>
+              <div class="nav-item-body">
+                <div class="nav-item-head">
+                  <b>${T('nav.upload')}</b>
+                </div>
+                <span>${T('nav.uploadSub')}</span>
+              </div>
+            </a>
+            <a class="nav-drop-item" href="#/delivery" data-warm="delivery">
+              <span class="nav-chip nav-chip-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h10m-10 5.5h7"/><circle cx="17.5" cy="15.5" r="3.5"/><path d="m16.2 15.5 1 1 2-2"/></svg>
+              </span>
+              <div class="nav-item-body">
+                <div class="nav-item-head">
+                  <b>${T('nav.delivery')}</b>
+                </div>
+                <span>${T('nav.deliverySub')}</span>
+              </div>
+            </a>
+            <a class="nav-drop-item" href="#/assembler" data-warm="assembler">
+              <span class="nav-chip nav-chip-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="8.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M10 7.5h4M6.5 11v4.5h2M17.5 11v4.5h-2"/></svg>
+              </span>
+              <div class="nav-item-body">
+                <div class="nav-item-head">
+                  <b>${T('nav.assembler')}</b>
+                </div>
+                <span>${T('nav.assemblerSub')}</span>
+              </div>
+            </a>
+          </div>
+        </div>
+        <a class="nav-direct" href="#/milestones" data-warm="milestones">${T('nav.milestones')}</a>
       </nav>
-      ${langSwitch()}
-      <a class="btn btn-signal btn-small" href="#try"><span class="only-wide">${T('nav.tryLive')}</span><span class="only-narrow">${T('nav.try')}</span></a>
+      <div class="topbar-right">
+        ${langSwitch()}
+        <a class="btn btn-signal btn-small" href="#/simulations" data-warm="simulations"><span class="only-wide">${T('nav.tryLive')}</span><span class="only-narrow">${T('nav.try')}</span></a>
+        <button type="button" class="nav-mobile-btn" aria-expanded="false" ${A({ 'aria-label': 'nav.menu' })}>
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path class="i-bars" d="M3 5.5h14M3 10h14M3 14.5h14"/><path class="i-close" d="M4.5 4.5l11 11M15.5 4.5l-11 11"/></svg>
+        </button>
+      </div>
     </header>
 
     <section class="chapter hero" id="home" data-shot="hero" data-mode="stand">
-      <div class="hero-live"><i class="live-dot"></i>${T('hero.live')}</div>
       <div class="caption hero-caption">
         <h1>${T('hero.title')}</h1>
         <p class="hero-lede"><span class="only-wide">${T('hero.lede')}</span><span class="only-narrow">${T('hero.ledeShort')}</span></p>
@@ -139,10 +208,6 @@ export function mount(root) {
           <a class="btn btn-ghost" href="#capture">${T('hero.howLink')}</a>
         </div>
       </div>
-      <div class="hud">
-        <p class="state" data-state="stand"><i></i><span>${T('hud.stand')}</span></p>
-        <p class="tally">${T('hud.tally', { pushes: '<span data-hud="pushes">0</span>', falls: '<span data-hud="falls">0</span>' })}</p>
-      </div>
       <div class="scroll-cue" aria-hidden="true"><span></span></div>
     </section>
 
@@ -150,11 +215,11 @@ export function mount(root) {
       <div class="sticky">
         <div class="capture-media">
           <figure class="frame frame-video">
-            <video class="walk-video" src="${WALK_VIDEO}" muted playsinline loop preload="auto"></video>
+            <video class="walk-video" src="${WALK_VIDEO}" muted playsinline loop preload="metadata"></video>
             <canvas class="walk-overlay" aria-hidden="true"></canvas>
           </figure>
           <figure class="frame frame-skeleton">
-            <canvas class="skeleton-canvas"></canvas>
+            <canvas class="skeleton-canvas" role="img" aria-label="3D human pose skeleton"></canvas>
           </figure>
         </div>
         <div class="caption capture-caption panel">
@@ -172,15 +237,15 @@ export function mount(root) {
           <h2>${T('gym.title')}</h2>
           <p class="gym-lede"><span class="only-wide">${T('gym.lede')}</span><span class="only-narrow">${T('gym.ledeShort')}</span></p>
           <div class="steps-meter">
-            <p class="steps-now"><b data-gym="steps">0</b><span>${T('gym.stepsLabel')}</span></p>
+            <p class="steps-now"><b data-gym="steps" data-value="10000000">10 M</b><span>${T('gym.stepsLabel')}</span></p>
             <div class="steps-axis">
               <div class="axis-track" aria-hidden="true">
                 <i class="axis-line"><i class="axis-fill"></i></i>
-                ${GYM_STAGES.map((stage) => `<i class="axis-tick" style="--at: ${(100 * stage.steps) / GYM_STAGES.at(-1).steps}%"></i>`).join('')}
+                ${GYM_STAGES.map((_, i) => `<i class="axis-tick" style="--at: ${(100 * i) / (GYM_STAGES.length - 1)}%"></i>`).join('')}
               </div>
               <div class="axis-stops" role="group" ${A({ 'aria-label': 'gym.stages' })}>
               ${GYM_STAGES.map((stage, i) => `
-                <button class="axis-stop" type="button" data-stage="${i}" style="--at: ${(100 * stage.steps) / GYM_STAGES.at(-1).steps}%">
+                <button class="axis-stop" type="button" data-stage="${i}" style="--at: ${(100 * i) / (GYM_STAGES.length - 1)}%">
                   <span class="axis-label">${T('gym.stepsAt', { n: stage.label })}</span>
                   <span class="axis-verdict">${T(`stage.${i}.verdict`)}</span>
                 </button>`).join('')}
@@ -208,7 +273,7 @@ export function mount(root) {
       </div>
     </section>
 
-    <section class="chapter policy" id="policy" data-shot="policy" data-mode="stand" data-rest="0.6">
+    <section class="chapter policy" id="policy" data-shot="policy" data-mode="stand" data-hold="0.82" data-rest="0.55">
       <div class="sticky">
         <div class="caption policy-caption panel">
           <p class="product">Tridi Policy</p>
@@ -233,46 +298,84 @@ export function mount(root) {
 
     <section class="chapter closing" id="teams" data-shot="close" data-mode="stand">
       <div class="closing-sticky">
-        <div class="closing-inner" id="try" data-offset="-112">
+        <div class="closing-inner" id="try" data-offset="-80">
           <h2 class="manifesto">${T('close.manifesto')}</h2>
           <p class="closing-text">${T('close.text')}</p>
+
           <nav class="tries" ${A({ 'aria-label': 'close.tries' })}>
             <a class="try" href="#/simulations" data-warm="simulations">
-              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M24 6l16 9v18l-16 9-16-9V15z"/><path d="M8 15l16 9 16-9M24 24v18"/></svg>
+              <div class="try-head">
+                <svg class="try-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 3.5 7v10L12 21.5l8.5-4.5V7L12 2.5Z"/><path d="M3.5 7 12 11.5 20.5 7M12 11.5v10"/></svg>
+              </div>
               <b><span class="only-wide">${T('try.sims')}</span><span class="only-narrow">${T('try.simsShort')}</span></b>
-              <span class="try-sub only-narrow">${T('try.simsSub')}</span>
+              <span class="try-sub">${T('try.simsSub')}</span>
               <span class="try-go">${T('try.simsGo')}</span>
             </a>
             <a class="try" href="#/live" data-warm="live">
-              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="14" width="28" height="20" rx="3"/><path d="M34 21l9-5v16l-9-5z"/><circle cx="20" cy="24" r="5"/></svg>
+              <div class="try-head">
+                <svg class="try-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="6" width="13.5" height="12" rx="2"/><path d="m16 10.2 5.5-3.2v10L16 13.8"/><circle cx="9.25" cy="12" r="2.2"/></svg>
+              </div>
               <b><span class="only-wide">${T('try.live')}</span><span class="only-narrow">${T('try.liveShort')}</span></b>
-              <span class="try-sub only-narrow">${T('try.live')}</span>
+              <span class="try-sub">${T('try.liveSub')}</span>
               <span class="try-go">${T('try.liveGo')}</span>
             </a>
             <a class="try" href="#/upload" data-warm="upload">
-              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="10" width="36" height="26" rx="3"/><path d="M24 31V17M18 22l6-6 6 6"/><path d="M14 40h20"/></svg>
+              <div class="try-head">
+                <svg class="try-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5V4.5m0 0-4 4m4-4 4 4"/><path d="M4 15.5v3a1.5 1.5 0 0 0 1.5 1.5h13a1.5 1.5 0 0 0 1.5-1.5v-3"/></svg>
+              </div>
               <b><span class="only-wide">${T('try.upload')}</span><span class="only-narrow">${T('try.uploadShort')}</span></b>
-              <span class="try-sub only-narrow">${T('try.uploadSub')}</span>
+              <span class="try-sub">${T('try.uploadSub')}</span>
               <span class="try-go">${T('try.uploadGo')}</span>
             </a>
             <a class="try" href="#/delivery" data-warm="delivery">
-              <svg class="try-icon" viewBox="0 0 48 48" aria-hidden="true"><rect x="8" y="16" width="32" height="24" rx="2"/><path d="M8 24h32M24 6v14M18 14l6 6 6-6"/></svg>
+              <div class="try-head">
+                <svg class="try-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5h16M4 12h10m-10 5.5h7"/><circle cx="17.5" cy="15.5" r="3.5"/><path d="m16.2 15.5 1 1 2-2"/></svg>
+              </div>
               <b><span class="only-wide">${T('try.delivery')}</span><span class="only-narrow">${T('try.deliveryShort')}</span></b>
-              <span class="try-sub only-narrow">${T('try.deliverySub')}</span>
+              <span class="try-sub">${T('try.deliverySub')}</span>
               <span class="try-go">${T('try.deliveryGo')}</span>
+            </a>
+            <a class="try" href="#/assembler" data-warm="assembler">
+              <div class="try-head">
+                <svg class="try-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="8.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M10 7.5h4M6.5 11v4.5h2M17.5 11v4.5h-2"/></svg>
+              </div>
+              <b><span class="only-wide">${T('try.assembler')}</span><span class="only-narrow">${T('try.assemblerShort')}</span></b>
+              <span class="try-sub">${T('try.assemblerSub')}</span>
+              <span class="try-go">${T('try.assemblerGo')}</span>
             </a>
           </nav>
         </div>
       </div>
       <footer class="footer">
-        <div class="foot-row">
-          <span class="wordmark big" aria-label="Tridi">${LOGO}${WORDMARK}</span>
-          <dl class="foot-specs">
-            <div><dt>${T('foot.madeAt')}</dt><dd>Platanus Hack 26, Caracas</dd></div>
-            <div><dt>${T('foot.milestones')}</dt><dd><a href="#/milestones" data-warm="milestones">${T('foot.milestonesLink')}</a></dd></div>
-            <div><dt>${T('foot.team')}</dt><dd><a href="https://github.com/Torpass" target="_blank" rel="noopener">Pastor Jiménez</a> · <a href="https://github.com/juanevillam" target="_blank" rel="noopener">Juan Villa</a> · <a href="https://github.com/CisorM" target="_blank" rel="noopener">César Martínez</a> · <a href="https://github.com/AleHernandezt" target="_blank" rel="noopener">Ale Hernández</a></dd></div>
-            <div><dt>${T('foot.code')}</dt><dd><a href="${REPO}" target="_blank" rel="noopener">${T('foot.repo')}</a></dd></div>
-          </dl>
+        <div class="foot-bar">
+          <div class="foot-brand-col">
+            <a class="wordmark big" href="#home" ${A({ 'aria-label': 'nav.home' })}>${LOGO}${WORDMARK}</a>
+            <p class="foot-rights">${T('foot.rights')}</p>
+          </div>
+          <div class="foot-columns">
+            <div class="foot-col">
+              <h4>${T('foot.colStudio')}</h4>
+              <a href="#/simulations" data-warm="simulations">${T('nav.simulations')}</a>
+              <a href="#/live" data-warm="live">${T('nav.live')}</a>
+              <a href="#/upload" data-warm="upload">${T('nav.upload')}</a>
+              <a href="#/delivery" data-warm="delivery">${T('nav.delivery')}</a>
+              <a href="#/assembler" data-warm="assembler">${T('nav.assembler')}</a>
+            </div>
+            <div class="foot-col">
+              <h4>${T('foot.colProduct')}</h4>
+              <a href="#capture">Tridi Capture</a>
+              <a href="#gym">Tridi Gym</a>
+              <a href="#policy">Tridi Policy</a>
+              <a href="#/milestones" data-warm="milestones">${T('foot.milestones')}</a>
+            </div>
+            <div class="foot-col">
+              <h4>${T('foot.team')}</h4>
+              <a href="https://www.linkedin.com/in/pastor-jimenez" target="_blank" rel="noopener">Pastor Jiménez</a>
+              <a href="https://www.linkedin.com/in/juanevillam" target="_blank" rel="noopener">Juan Villa</a>
+              <a href="https://www.linkedin.com/in/cesarmartinez-dev" target="_blank" rel="noopener">César Martínez</a>
+              <a href="https://www.linkedin.com/in/alehernandezt" target="_blank" rel="noopener">Ale Hernández</a>
+            </div>
+          </div>
         </div>
       </footer>
     </section>
@@ -286,6 +389,64 @@ export function mount(root) {
     target.addEventListener(type, fn, options);
     cleanups.push(() => target.removeEventListener(type, fn, options));
   };
+
+  // ---- Unified Navbar Dropdowns (Hover on Desktop, Accordion on Mobile) ----
+  const topbarEl = $('.topbar');
+  const navDrops = $$('.nav-drop');
+  const mobileBtn = $('.nav-mobile-btn');
+  const closeAllMenus = () => {
+    for (const drop of navDrops) {
+      drop.classList.remove('open');
+      drop.classList.add('dismissed');
+      drop.querySelector('.nav-drop-btn')?.setAttribute('aria-expanded', 'false');
+    }
+    if (topbarEl) topbarEl.classList.remove('menu-open');
+    if (mobileBtn) mobileBtn.setAttribute('aria-expanded', 'false');
+  };
+  for (const drop of navDrops) {
+    const btn = drop.querySelector('.nav-drop-btn');
+    on(drop, 'pointerenter', () => {
+      drop.classList.remove('dismissed');
+      for (const other of navDrops) {
+        if (other !== drop) {
+          other.classList.remove('open');
+          other.querySelector('.nav-drop-btn')?.setAttribute('aria-expanded', 'false');
+        }
+      }
+    });
+    if (!btn) continue;
+    on(btn, 'click', (e) => {
+      e.stopPropagation();
+      drop.classList.remove('dismissed');
+      const willOpen = !drop.classList.contains('open');
+      for (const other of navDrops) {
+        other.classList.remove('open');
+        other.querySelector('.nav-drop-btn')?.setAttribute('aria-expanded', 'false');
+      }
+      if (willOpen) {
+        drop.classList.add('open');
+        btn.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+  if (mobileBtn && topbarEl) {
+    on(mobileBtn, 'click', (e) => {
+      e.stopPropagation();
+      const willOpen = !topbarEl.classList.contains('menu-open');
+      topbarEl.classList.toggle('menu-open', willOpen);
+      mobileBtn.setAttribute('aria-expanded', String(willOpen));
+      if (willOpen && !navDrops.some((d) => d.classList.contains('open')) && navDrops[0]) {
+        navDrops[0].classList.add('open');
+        navDrops[0].querySelector('.nav-drop-btn')?.setAttribute('aria-expanded', 'true');
+      }
+    });
+  }
+  on(document, 'click', (e) => {
+    if (!e.target.closest?.('.topbar')) closeAllMenus();
+  });
+  on(window, 'keydown', (e) => {
+    if (e.key === 'Escape') closeAllMenus();
+  });
 
   // ---- Smooth scroll, and GSAP's scroll triggers driven by it ----
   // gymGate (Gym, below) sees every wheel step first, so a fast scroll stops at each stage.
@@ -318,11 +479,23 @@ export function mount(root) {
     link.addEventListener('pointerenter', warm, { once: true });
     link.addEventListener('focus', warm, { once: true });
   }
+  for (const link of $$('.topbar a')) {
+    on(link, 'click', () => closeAllMenus());
+  }
   for (const link of $$('a[href^="#"]:not([href^="#/"])')) {
     on(link, 'click', (event) => {
       event.preventDefault();
+      closeAllMenus();
       const target = root.querySelector(link.getAttribute('href'));
       if (target) scrollTo(target);
+    });
+  }
+  const scrollTopBtn = $('[data-scroll-top]');
+  if (scrollTopBtn) {
+    on(scrollTopBtn, 'click', () => {
+      closeAllMenus();
+      const homeEl = $('#home');
+      if (homeEl) scrollTo(homeEl);
     });
   }
 
@@ -480,14 +653,27 @@ export function mount(root) {
   // ---- What the robot does in each chapter ----
   let level = null; // checked against view.sim.policy.id so returning from another robot always reloads G1
   let queue = Promise.resolve();
-  function useLevel(id) {
+  function useLevel(id, { forceReset = false } = {}) {
     queue = queue
       .then(async () => {
-        if (gone || !view || (level === id && view.sim?.policy?.id === id && view.sim?.policy?.robot === 'unitree_g1')) return;
+        if (gone || !view) return;
         const wasNonG1 = view.sim?.policy?.robot && view.sim.policy.robot !== 'unitree_g1';
+        const hadClip = Boolean(view.clipTime?.() > 0 || view.sim?.puppeted);
+        if (hadClip) view.stop();
+        const [px0, py0, pz0] = view.sim ? view.sim.bodyPosition('pelvis') : [0, 0, 0.78];
+        const drifted = Math.hypot(px0, py0) > 0.35;
+        const standing = !forceReset && !wasNonG1 && !hadClip && !drifted && pz0 >= FALLEN_PELVIS_M;
+        if (level === id && view.sim?.policy?.id === id && !wasNonG1) {
+          if (!standing && view.sim) {
+            view.stop();
+            const [px, py] = view.sim.bodyPosition('pelvis');
+            view.viewer.controls.target.set(px, view.viewer.targetHeight, -py);
+          }
+          return;
+        }
         const { onnx, json } = policyUrls(id);
-        await view.loadPolicy(onnx, json);
-        if (wasNonG1 && view.sim) {
+        await view.loadPolicy(onnx, json, { reset: !standing });
+        if ((wasNonG1 || !standing) && view.sim) {
           const [px, py] = view.sim.bodyPosition('pelvis');
           view.viewer.controls.target.set(px, view.viewer.targetHeight, -py);
         }
@@ -504,30 +690,36 @@ export function mount(root) {
   async function setMode(next) {
     if (!view || mode === next) return;
     const [kind, wanted = FINAL_LEVEL] = next.split(':');
-    const previous = mode?.split(':')[0];
     mode = next;
     const token = ++modeToken;
     Object.assign(gym, { since: 0, shownAt: 0 });
+    // Immediately stop any active walking clip whenever leaving Capture ('walk') so a rapid scroll
+    // through chapters can never leave the robot walking in Hero, Gym, or Policy.
+    if (kind !== 'walk' && (view.clipTime?.() > 0 || view.sim?.puppeted)) {
+      view.stop();
+      const [px, py] = view.sim.bodyPosition('pelvis');
+      view.viewer.controls.target.set(px, view.viewer.targetHeight, -py);
+    }
     if (kind === 'walk') {
       await useLevel(FINAL_LEVEL);
       const motion = await walkMotion;
-      // From the first frame, with the video: resuming where the video was paused made the robot
-      // jump along the walk (1.9 m) the moment it started. Coming back up from below, it starts
-      // at the end instead and walks backward to where the story began (updateWalk).
       walk.t = walk.dir < 0 ? walkDuration() : 0;
       video.currentTime = walk.t;
-      // plantFeet 'auto', as Simulations plays it: GVHMR's path already matches the stride. Forcing it
-      // was for MediaPipe's walk, whose path was too short and slid the planted foot backward.
       if (token === modeToken && motion) view.playClip(motion);
     } else if (kind === 'gym') {
-      await useLevel(gymLevel());
-      if (token === modeToken) startGymRun();
+      gym.loading = true;
+      await useLevel(gymLevel(), { forceReset: true });
+      gym.loading = false;
+      if (token === modeToken && mode === 'gym') startGymRun();
     } else {
-      await useLevel(wanted);
-      // Stood back up only when it is not already standing on its own: on the first visit, after
-      // the walk (a puppet) or lying on the floor. From the Gym it keeps standing, with no jump.
-      const fallen = view.sim.bodyPosition('pelvis')[2] < FALLEN_PELVIS_M;
-      if (token === modeToken && (previous !== 'gym' || fallen)) view.stop();
+      userOrbit.az = 0;
+      userOrbit.el = 0;
+      await useLevel(wanted, { forceReset: true });
+      if (token === modeToken && view.sim) {
+        view.stop();
+        const [px, py] = view.sim.bodyPosition('pelvis');
+        view.viewer.controls.target.set(px, view.viewer.targetHeight, -py);
+      }
     }
   }
   const modeAt = () => {
@@ -540,10 +732,11 @@ export function mount(root) {
   // Hero: the robot stands on its own with the trained policy; a push shows it catching itself.
   // fallenAt: when the robot was first seen on the floor (0 while standing), to stand it up again.
   const hero = { pushes: 0, falls: 0, pushedAt: 0, fallen: false, fallenAt: 0 };
-  const stateEl = $('.hud .state');
+  const readoutEl = $('.sim-readout');
+  const stateSpan = $('[data-sim="state"]');
   const say = (state, key, vars) => {
-    stateEl.dataset.state = state;
-    stateEl.querySelector('span').innerHTML = T(key, vars);
+    if (readoutEl) readoutEl.dataset.state = state;
+    if (stateSpan) stateSpan.innerHTML = T(key, vars);
   };
   let heroTimer = 0;
   // The hero's push is the one the trained robot holds, spaced as in training (push.js); the
@@ -558,7 +751,6 @@ export function mount(root) {
     hero.pushes += 1;
     hero.pushedAt = performance.now();
     hero.fallen = false;
-    $('[data-hud="pushes"]').textContent = hero.pushes;
     say('push', 'hud.push', { n: STANDING_PUSH_N });
     for (const button of $$('.hero-push')) {
       button.classList.remove('kick');
@@ -574,7 +766,14 @@ export function mount(root) {
   // coming back to the hero with it fallen), is stood up again after GYM_RESTART_S, as in the Gym:
   // before, only a timer 5 s after the push did it, so a later fall left it lying until a reload.
   function standHeroUp(now) {
-    const down = view.sim.bodyPosition('pelvis')[2] < FALLEN_PELVIS_M;
+    const [px, py, pz] = view.sim.bodyPosition('pelvis');
+    const down = pz < FALLEN_PELVIS_M;
+    // Also keep the standing robot anchored inside its stage origin in Hero/Policy if a push moved it far.
+    if (!down && Math.hypot(px, py) > RING_M * 0.95 && now - hero.pushedAt > 2400) {
+      view.reset();
+      view.viewer.controls.target.set(0, view.viewer.targetHeight, 0);
+      return;
+    }
     if (!down) {
       hero.fallenAt = 0;
       return;
@@ -584,11 +783,11 @@ export function mount(root) {
       if (hero.pushedAt && !hero.fallen) {
         hero.fallen = true; // the policy misses some pushes (training/README.md): say so
         hero.falls += 1;
-        $('[data-hud="falls"]').textContent = hero.falls;
         say('fall', 'hud.fall');
       }
     } else if (now - hero.fallenAt > GYM_RESTART_S * 1000) {
       view.reset();
+      view.viewer.controls.target.set(0, view.viewer.targetHeight, 0);
       hero.fallenAt = 0;
       hero.fallen = false;
       say('stand', 'hud.stand');
@@ -706,27 +905,9 @@ export function mount(root) {
   layoutObserver.observe(root.querySelector('.landing'));
   cleanups.push(() => layoutObserver.disconnect());
   const gymLevel = () => GYM_STAGES[gymStage()].level;
-  const gymShown = (stage) => level === GYM_STAGES[stage].level && gym.shownAt > 0 && performance.now() >= gym.shownAt;
-  const gate = { stop: -1, since: 0 };
-  function gymGate(data) {
-    const { event } = data;
-    // Touch scrolls natively (Lenis has no syncTouch here); before the robot loads there is nothing to wait for.
-    if (!event.type.includes('wheel') || event.ctrlKey || !view) return true;
-    const from = lenis.targetScroll;
-    const stops = gymStops();
-    const holding =
-      gate.stop >= 0 && Math.abs(from - stops[gate.stop]) < STOP_PX && !gymShown(gate.stop) && performance.now() - gate.since < GYM_HOLD_MAX_S * 1000;
-    if (!holding) gate.stop = -1;
-    if (data.deltaY <= 0) return true; // up and sideways are always free
-    if (holding) {
-      if (event.cancelable) event.preventDefault(); // Lenis skips its own preventDefault when this returns false
-      return false;
-    }
-    const next = stops.findIndex((stop) => from < stop - STOP_PX && stop <= from + data.deltaY);
-    if (next < 0 || gymShown(next) || held.has(next)) return true;
-    data.deltaY = stops[next] - from; // Lenis reads the delta after this callback: land on the stop
-    Object.assign(gate, { stop: next, since: performance.now() });
-    held.add(next);
+  function gymGate() {
+    // Let wheel and trackpad scrolling glide naturally through Tridi Gym without clamping or blocking deltaY,
+    // which previously fought trackpad momentum and caused scroll stutter/flicker.
     return true;
   }
   $$('.axis-stop').forEach((stop, i) =>
@@ -738,9 +919,9 @@ export function mount(root) {
     }),
   );
   // Phone arrows: one screen per chapter, and inside the Gym one stage per tap.
-  const chapterIndex = () => Math.max(0, chapters.findLastIndex((c) => c.offsetTop <= scrollY + innerHeight * 0.4));
-  const goTo = (chapter) => {
-    const top = chapter.offsetTop;
+  const chapterIndex = () => Math.max(0, layout.tops.findLastIndex((top) => top <= scrollY + innerHeight * 0.4));
+  const goTo = (chapterIdx) => {
+    const top = layout.tops[chapterIdx] ?? 0;
     if (lenis) lenis.scrollTo(top, { duration: 0.8 });
     else window.scrollTo({ top, behavior: reducedMotion ? 'auto' : 'smooth' });
   };
@@ -750,10 +931,11 @@ export function mount(root) {
       const next = phone.stage + direction;
       if (next >= 0 && next < GYM_STAGES.length) return void (phone.stage = next);
     }
-    const target = chapters[i + direction];
+    const targetIdx = i + direction;
+    const target = chapters[targetIdx];
     if (!target) return;
     if (target === gymEl) phone.stage = direction > 0 ? 0 : GYM_STAGES.length - 1;
-    goTo(target);
+    goTo(targetIdx);
   }
   on($('.arrow-up'), 'click', () => step(-1));
   on($('.arrow-down'), 'click', () => step(1));
@@ -767,6 +949,7 @@ export function mount(root) {
   updateArrows();
 
   let shownStage = -1;
+  const stepsCounter = { value: GYM_STAGES[0].steps };
   // Numbers written as text (the step counter) take the new language's decimal mark on a switch.
   cleanups.push(onLang(() => (shownStage = -1)));
   function showGymStage() {
@@ -793,29 +976,26 @@ export function mount(root) {
       const pct = current.maxN <= 0 ? 0 : Math.min(100, Math.max(0, ((current.maxN - 50) / 450) * 100));
       zoneEl.style.width = `${pct}%`;
     }
-    // The big number counts up (or back) to this stage's steps.
-    const shown = { value: Number($('[data-gym="steps"]').dataset.value ?? 0) };
-    gsap.to(shown, {
+    // Single shared counter object with killTweensOf so rapid stage changes never run competing tweens.
+    gsap.killTweensOf(stepsCounter);
+    gsap.to(stepsCounter, {
       value: current.steps,
-      duration: reducedMotion ? 0 : 0.9,
+      duration: reducedMotion ? 0 : 0.65,
       ease: 'power2.out',
       onUpdate: () => {
         const el = $('[data-gym="steps"]');
-        el.dataset.value = shown.value;
-        el.textContent =
-          shown.value >= 9.95e8
-            ? `${fmt(shown.value / 1e9, 0)(lang())} B`
-            : shown.value >= 1e6
-              ? `${fmt(shown.value / 1e6, shown.value < 1e7 ? 1 : 0)(lang())} M`
-              : fmtInt(shown.value)(lang());
+        if (!el) return;
+        el.dataset.value = stepsCounter.value;
+        const millions = Math.max(1, Math.round(stepsCounter.value / 1e6));
+        el.textContent = `${fmtInt(millions)(lang())} M`;
       },
     });
   }
   // Times are the simulation's own clock, not the wall's: a slow or hidden tab cannot fake them.
   function startGymRun() {
     view.stop();
-    const [x, y] = view.sim.bodyPosition('pelvis');
-    marks?.ring.position.set(x, marks.ring.position.y, -y);
+    marks?.ring.position.set(0, marks.ring.position.y, 0);
+    view.viewer.controls.target.set(0, view.viewer.targetHeight, 0);
     const t = view.sim.data.time;
     $('[data-gym="status"]').innerHTML = T('gym.live'); // not the last checkpoint's fall
     // The first push comes at GYM_FIRST_PUSH_S, then every GYM_PUSH_EVERY_S.
@@ -828,7 +1008,7 @@ export function mount(root) {
       Object.assign(gym, { since: 0, shownAt: 0 }); // a new checkpoint has shown nothing yet
       gym.loading = true;
       const token = modeToken;
-      useLevel(wanted).then(() => {
+      useLevel(wanted, { forceReset: true }).then(() => {
         gym.loading = false;
         if (token === modeToken && mode === 'gym') startGymRun();
       });
@@ -838,12 +1018,19 @@ export function mount(root) {
     const now = view.sim.data.time;
     const up = now - gym.since;
     $('[data-gym="up"]').textContent = `${fmt(up, 1)(lang())} s`;
-    if (view.sim.bodyPosition('pelvis')[2] < FALLEN_PELVIS_M) {
+    const [px, py, pz] = view.sim.bodyPosition('pelvis');
+    if (pz < FALLEN_PELVIS_M) {
       gym.fallen = true;
       gym.shownAt ||= performance.now() + GYM_SHOWN_FALL_S * 1000;
       $('[data-gym="status"]').innerHTML = T('gym.fell');
       setTimeout(() => mode === 'gym' && level === wanted && startGymRun(), GYM_RESTART_S * 1000);
       return;
+    }
+    // Keep the robot inside its 1.2 m training ring: if recovery steps carry it out of the circle,
+    // recenter it cleanly inside the ring so it never wanders down the street.
+    if (Math.hypot(px, py) > RING_M * 0.85) {
+      view.reset();
+      view.viewer.controls.target.set(0, view.viewer.targetHeight, 0);
     }
     if (now - gym.lastPush > GYM_PUSH_EVERY_S) {
       gym.lastPush = pushed.lastT = now;
@@ -923,7 +1110,10 @@ export function mount(root) {
         if (isCurrent) link.setAttribute('aria-current', 'true');
         else link.removeAttribute('aria-current');
       }
-      if (hudEl) hudEl.classList.toggle('is-closing', chapter.dataset.shot === 'close');
+      if (hudEl) {
+        hudEl.dataset.shot = chapter.dataset.shot || 'hero';
+        hudEl.classList.toggle('is-closing', chapter.dataset.shot === 'close');
+      }
     }
     const [left, right] = WASH[chapter.dataset.shot] ?? [0, 0];
     const goal = narrow() ? { left: 0, right: 0, floor: chapter.dataset.shot === 'close' ? 0 : 1 } : { left, right, floor: 0 };
@@ -975,14 +1165,23 @@ export function mount(root) {
       saved = { offset: camera.position.clone().sub(controls.target), targetHeight: view.viewer.targetHeight, maxPolarAngle: controls.maxPolarAngle };
       controls.enabled = false; // the scroll directs the camera here
       // Trailer lighting while the landing has the robot: a key light that rides with the camera
-      // (directCamera moves it), so every shot is lit from the front whatever the angle, and a
-      // rim from behind that draws the silhouette. Taken out again on unmount.
+      // (directCamera moves it), so every shot is lit from the front whatever the angle, while
+      // reusing viewer.sun and viewer.scene's existing HemisphereLight instead of adding duplicates.
       key = new THREE.PointLight(0xffffff, 9, 0, 1.2);
-      const rim = new THREE.DirectionalLight(0xfff1e6, 2.2);
-      rim.position.set(-3, 2.5, 2);
-      // Ambient sky light and a brighter exposure, so the dark scene never swallows the robot.
-      const sky = new THREE.HemisphereLight(0xffffff, 0x3a3833, 1.4);
-      lights = [key, rim, sky];
+      const sunLight = view.viewer.sun;
+      const hemiLight = view.viewer.scene.children.find((o) => o.isHemisphereLight);
+      saved.sun = sunLight && { color: sunLight.color.getHex(), intensity: sunLight.intensity, pos: sunLight.position.clone() };
+      saved.hemi = hemiLight && { color: hemiLight.color.getHex(), ground: hemiLight.groundColor.getHex(), intensity: hemiLight.intensity };
+      if (sunLight) {
+        sunLight.color.setHex(0xfff1e6);
+        sunLight.intensity = 2.2;
+      }
+      if (hemiLight) {
+        hemiLight.color.setHex(0xffffff);
+        hemiLight.groundColor.setHex(0x3a3833);
+        hemiLight.intensity = 1.4;
+      }
+      lights = [key];
       saved.exposure = view.viewer.renderer.toneMappingExposure;
       saved.pixelRatio = view.viewer.renderer.getPixelRatio();
       view.viewer.renderer.setPixelRatio(Math.min(devicePixelRatio, FILM_PIXEL_RATIO));
@@ -1013,7 +1212,8 @@ export function mount(root) {
     idle(() => {
       for (const stage of GYM_STAGES) {
         const { onnx, json } = policyUrls(stage.level);
-        for (const url of [onnx, json]) if (url) fetch(url).catch(() => {});
+        if (onnx) fetchCachedOnnxBytes(onnx).catch(() => {});
+        if (json) fetchCachedJson(json).catch(() => {});
       }
     }, { timeout: 3000 });
   }
@@ -1023,7 +1223,7 @@ export function mount(root) {
     if (reducedMotion) return;
     // Hero words: lines rise in on load; the whole caption drifts up and fades as you leave.
     gsap.from('.hero-caption > *', { y: 40, opacity: 0, duration: 1.2, ease: 'expo.out', stagger: 0.08, delay: 0.2 });
-    gsap.to('.hero-caption, .hud, .hero-live', {
+    gsap.to('.hero-caption', {
       y: -80,
       opacity: 0,
       ease: 'none',
@@ -1032,18 +1232,18 @@ export function mount(root) {
 
     // Capture: video, skeleton and robot are all on screen at once; the frames and the one text
     // rise in as the chapter arrives.
-    gsap.from('.capture-media .frame, .capture-caption > *', {
+    gsap.from('.capture-media .frame, .capture-caption', {
       opacity: 0,
-      y: 40,
-      stagger: 0.06,
+      y: 28,
+      stagger: 0.08,
       scrollTrigger: { trigger: '.capture', start: 'top 75%', end: 'top 15%', scrub: true },
     });
 
-    // Gym: its words come in once; the stages then follow the scroll (gymStage) and stop it (gymGate).
-    gsap.from('.gym-caption > *', { opacity: 0, y: 30, stagger: 0.08, duration: 0.6, scrollTrigger: { trigger: '.gym', start: 'top 60%', toggleActions: 'play none none none' } });
+    // Gym: card rises in as one unit so children never shift outside the panel border.
+    gsap.from('.gym-caption', { opacity: 0, y: 20, duration: 0.55, scrollTrigger: { trigger: '.gym', start: 'top 65%', toggleActions: 'play none none none' } });
 
-    // Policy: card rises in cleanly on arrival so all 4 specs and CTA button are immediately visible.
-    gsap.from('.policy-caption > *', { opacity: 0, y: 24, stagger: 0.06, duration: 0.55, scrollTrigger: { trigger: '.policy', start: 'top 65%', toggleActions: 'play none none none' } });
+    // Policy: card rises in cleanly as one unit so all 4 specs and CTA button stay inside the panel.
+    gsap.from('.policy-caption', { opacity: 0, y: 20, duration: 0.55, scrollTrigger: { trigger: '.policy', start: 'top 65%', toggleActions: 'play none none none' } });
 
     // Closing: the page closes over the film like a curtain, and the manifesto rises word by word.
     gsap.fromTo('.film-shade', { '--shade': 0 }, { '--shade': 0.88, immediateRender: false, scrollTrigger: { trigger: '.closing', start: 'top bottom', end: 'top 30%', scrub: true } });
@@ -1116,6 +1316,18 @@ export function mount(root) {
       controls.enabled = true;
       view.viewer.followTau = 0; // the app screens follow the robot rigidly
       lights.forEach((light) => view.viewer.scene.remove(light));
+      const sunLight = view.viewer.sun;
+      const hemiLight = view.viewer.scene.children.find((o) => o.isHemisphereLight);
+      if (sunLight && saved.sun) {
+        sunLight.color.setHex(saved.sun.color);
+        sunLight.intensity = saved.sun.intensity;
+        sunLight.position.copy(saved.sun.pos);
+      }
+      if (hemiLight && saved.hemi) {
+        hemiLight.color.setHex(saved.hemi.color);
+        hemiLight.groundColor.setHex(saved.hemi.ground);
+        hemiLight.intensity = saved.hemi.intensity;
+      }
       view.viewer.renderer.toneMappingExposure = saved.exposure;
       view.viewer.renderer.setPixelRatio(saved.pixelRatio);
       view.viewer.resize();

@@ -1,0 +1,30 @@
+<mujoco model="component_cny70_ir_reflective">
+  <compiler angle="radian"/>
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <worldbody>
+    <light pos="0.4 -0.4 0.6" dir="-0.5 0.5 -0.7"/>
+    <geom name="floor" type="plane" size="0.5 0.5 0.01" rgba="0.12 0.16 0.22 1" contype="0" conaffinity="0"/>
+    <body name="pelvis" pos="0 0 0.065">
+      <body name="torso_link" pos="0 0 0.02"/>
+      <body name="sensor_turret" pos="0 0 0">
+        <inertial pos="0 0 0" mass="0.004" diaginertia="0.0001 0.0001 0.0001"/>
+        <joint name="demo_joint" type="hinge" axis="0 0 1" range="-1.2 1.2" damping="0.05" armature="0.002"/>
+        <!-- Cube CNY70 Reflective Optical Sensor (7x7x6 mm, scaled 4x for inspection) -->
+        <geom name="cny70_housing" type="box" pos="0 0 0" size="0.016 0.018 0.018" group="2" rgba="0.12 0.13 0.16 1"/>
+        <geom name="emitter_eye" type="cylinder" pos="0.0165 0.007 0" quat="0.7071068 0 0.7071068 0" size="0.0055 0.002" group="2" rgba="0.28 0.55 0.92 1"/>
+        <geom name="detector_eye" type="cylinder" pos="0.0165 -0.007 0" quat="0.7071068 0 0.7071068 0" size="0.0055 0.002" group="2" rgba="0.18 0.18 0.24 1"/>
+        <geom name="lead_1" type="cylinder" pos="-0.008 0.008 -0.028" size="0.0015 0.012" group="2" rgba="0.82 0.84 0.88 1"/>
+        <geom name="lead_2" type="cylinder" pos="-0.008 -0.008 -0.028" size="0.0015 0.012" group="2" rgba="0.82 0.84 0.88 1"/>
+        <geom name="lead_3" type="cylinder" pos="0.008 0.008 -0.028" size="0.0015 0.012" group="2" rgba="0.82 0.84 0.88 1"/>
+        <geom name="lead_4" type="cylinder" pos="0.008 -0.008 -0.028" size="0.0015 0.012" group="2" rgba="0.82 0.84 0.88 1"/>
+      </body>
+    </body>
+  </worldbody>
+  <actuator>
+    <position name="demo_actuator" joint="demo_joint" kp="4.0" ctrlrange="-1.2 1.2" ctrllimited="true"/>
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0" ctrl="0"/>
+    <key name="stand" qpos="0" ctrl="0"/>
+  </keyframe>
+</mujoco>
